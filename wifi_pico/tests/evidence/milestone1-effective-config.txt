@@ -1,0 +1,8 @@
+CNF_SMP=1
+TK_SUPPORT_SMP=1
+TK_MAX_CORE=2
+TM_CONSOLE_USB_CDC=1
+TM_CONSOLE_UART=0
+USE_SDEV_DRV=(0)
+CFLAGS=-mcpu=cortex-m0plus -mthumb -ffreestanding -std=gnu11 -O2 -g3 -MMD -MP -mfloat-abi=soft -DCNF_SMP=1 -DTM_CONSOLE_USB_CDC=1 -DNDEBUG -I../lib/libtm/sysdepend/pico_rp2040/usb -I/mnt/c/Users/idesp/.pico-sdk/sdk/2.2.0/lib/tinyusb/src -I/mnt/c/Users/idesp/.pico-sdk/sdk/2.2.0/src/common/pico_base_headers/include -I/mnt/c/Users/idesp/.pico-sdk/sdk/2.2.0/src/common/pico_binary_info/include -I/mnt/c/Users/idesp/.pico-sdk/sdk/2.2.0/src/rp2040/pico_platform/include -I/mnt/c/Users/idesp/.pico-sdk/sdk/2.2.0/src/rp2_common/pico_platform_compiler/include -I/mnt/c/Users/idesp/.pico-sdk/sdk/2.2.0/src/rp2_common/pico_platform_sections/include -I/mnt/c/Users/idesp/.pico-sdk/sdk/2.2.0/src/rp2_common/pico_platform_panic/include -I/mnt/c/Users/idesp/.pico-sdk/sdk/2.2.0/src/rp2_common/pico_platform_common/include -I/mnt/c/Users/idesp/.pico-sdk/sdk/2.2.0/src/rp2_common/hardware_base/include -I/mnt/c/Users/idesp/.pico-sdk/sdk/2.2.0/src/rp2_common/hardware_irq/include -I/mnt/c/Users/idesp/.pico-sdk/sdk/2.2.0/src/rp2_common/hardware_resets/include -I/mnt/c/Users/idesp/.pico-sdk/sdk/2.2.0/src/rp2_common/hardware_sync/include -I/mnt/c/Users/idesp/.pico-sdk/sdk/2.2.0/src/rp2_common/hardware_sync_spin_lock/include -I/mnt/c/Users/idesp/.pico-sdk/sdk/2.2.0/src/rp2_common/hardware_timer/include -I/mnt/c/Users/idesp/.pico-sdk/sdk/2.2.0/src/rp2040/hardware_regs/include -I/mnt/c/Users/idesp/.pico-sdk/sdk/2.2.0/src/rp2040/hardware_structs/include -DTM_CONSOLE_UART=0 -include ../../config/milestone1.h
+ASFLAGS=-mcpu=cortex-m0plus -mthumb -ffreestanding -x assembler-with-cpp -O2 -g3 -MMD -MP -DCNF_SMP=1

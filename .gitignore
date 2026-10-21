@@ -1,15 +1,36 @@
-build/
+# Generated workspaces and dependencies
 **/build/
-node_modules/
+**/build-*/
+**/build_make/
 **/node_modules/
+**/.npm-cache/
+**/__pycache__/
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake
 build.ninja
 .ninja_*
-*.uf2
+*.o
+*.d
+*.a
+*.exe
 *.elf
+*.uf2
 *.bin
 *.hex
 *.map
 *.dis
+*.pyc
+# Local editor/toolchain configuration
+**/.vscode/
+# Local credentials; example templates remain shareable
+.env
+.env.*
+!.env.example
+**/config/wifi_credentials.h
+**/config/wifi_secrets.h
+**/config/network_config.h
+**/config/udp_test_config.h
+**/config/tcp_test_config.h
+*.pem
+*.key

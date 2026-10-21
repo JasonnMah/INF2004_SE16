@@ -1,0 +1,15 @@
+{
+  "kind": "observed host-test runs, not physical/kernel execution",
+  "protocol_host_checks": "PASS",
+  "bare_metal_ui_host_checks": "PASS",
+  "reliability_groups": {
+    "receive_timeout": "PASS",
+    "state_guard": "PASS",
+    "end_duplicate": "PASS",
+    "changed_duplicate": "PASS",
+    "overflow_recovery": "PASS",
+    "pending_failure": "PASS",
+    "parser_resync": "PASS",
+    "wire_faults": "PASS"
+  }
+}

@@ -1,0 +1,35 @@
+[UI] Sending CONFIG
+[P2] CONFIG acknowledged
+[UI] CONFIG acknowledged
+[UI] Requesting stored data
+[UART0] RX/TX loss fault=1; partial log discarded
+[UI] Data retrieval failed
+[RX] received_log_valid=0 received_bytes=0
+
+[P1] Transfer timeout: retransmitted pending frame
+
+[P1] Transfer timeout: retransmitted pending frame
+
+[P1] Transfer timeout: retransmitted pending frame
+
+[P1] Transfer timeout: retry limit reached
+[UI] Requesting stored data
+[P2] REQUEST_DATA acknowledged
+[P2] DATA block received and ACKed
+[P2] DATA block received and ACKed
+[P2] DATA block received and ACKed
+[P2] DATA block received and ACKed
+[P2] DATA block received and ACKed
+[P2] DATA block received and ACKed
+[P2] DATA block received and ACKed
+[P2] DATA block received and ACKed
+[P2] DATA block received and ACKed
+[P2] DATA block received and ACKed
+[P2] DATA block received and ACKed
+[P2] DATA block received and ACKed
+[P2] DATA block received and ACKed
+[P2] TRANSFER_END validated
+[TEST] Completed log matches emulator: bytes=100 completion_count=1
+[UI] Data retrieval complete
+[EMU] TRANSFER_END ACK received
+PASS: UART app host model overflow_recovery (fault=0)

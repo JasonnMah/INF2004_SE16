@@ -1,0 +1,62 @@
+--- a/build_make/makefile
++++ b/build_make/makefile
+@@ -55,6 +55,17 @@
+ 
+ -include mtkernel_3/app_program/subdir.mk
+ 
++# Project profile must be loaded before prerequisites are expanded.
++ifeq ($(INF2004_MILESTONE1),1)
++include ../../milestone1.mk
++endif
++ifeq ($(INF2004_UART),1)
++ifeq ($(INF2004_MILESTONE1),1)
++$(error Select one project application profile)
++endif
++include ../../uart_milestone.mk
++endif
++
+ ifneq ($(MAKECMDGOALS),clean)
+ ifneq ($(strip $(ASM_DEPS)),)
+ -include $(ASM_DEPS)
+--- a/config/config.h
++++ b/config/config.h
+@@ -168,7 +168,7 @@
+ /* Use Sample device driver.
+  *  1: Valid  0: Invalid
+  */
+-#define USE_SDEV_DRV		(1)	/* Use Sample device driver */
++#define USE_SDEV_DRV		(0)	/* INF2004: UART0 belongs to the protocol, not sample drivers. */
+ 
+ /*---------------------------------------------------------------------- */
+ /*
+--- a/kernel/sysdepend/pico_rp2040/hw_setting.c
++++ b/kernel/sysdepend/pico_rp2040/hw_setting.c
+@@ -46,7 +46,9 @@
+ LOCAL const UW module_tbl[] = {
+ 	RESETS_RESET_IO_BANK0,		/* IO_BANK0 */
+ 	RESETS_RESET_PADS_BANK0,	/* PADS_BANK0 */
+-	RESETS_RESET_UART0,		/* UART0 */
++#if TM_CONSOLE_UART
++	RESETS_RESET_UART0,		/* Console only; otherwise leave UART0 in reset. */
++#endif
+ 
+ #if TM_WIFI_CYW43
+ 	/* The Pico W radio transport runs a PIO state machine with two DMA
+@@ -73,12 +75,11 @@
+  * Setup pin functions Tadle
+  */
+ LOCAL const T_SETUP_REG pinfnc_tbl[] = {
+-	/* External LED */
+-	{GPIO_CTRL(BOARD_LED_PIN),	GPIO_CTRL_FUNCSEL_SIO},	/* LED pin GPIO */
+-	{GPIO_OE, (1<<BOARD_LED_PIN)},				/* LED pin output enable */
+-	/* P0,P1 : UART0 */
+-	{GPIO_CTRL(0),	GPIO_CTRL_FUNCSEL_UART},	/* P0 UART0-TX */
+-	{GPIO_CTRL(1),	GPIO_CTRL_FUNCSEL_UART},	/* P1 UART0-RX */
++	/* INF2004 milestone 1 uses USB only and claims no indicator GPIO. */
++#if TM_CONSOLE_UART
++	{GPIO_CTRL(0),	GPIO_CTRL_FUNCSEL_UART},	/* UART0-TX console */
++	{GPIO_CTRL(1),	GPIO_CTRL_FUNCSEL_UART},	/* UART0-RX console */
++#endif
+ 
+ #if USE_SDEV_DRV	// Do not use sample device driver
+ 	/* P26 : ADC0 */
