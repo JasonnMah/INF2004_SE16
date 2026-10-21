@@ -1,0 +1,44 @@
+[
+  {
+    "case": "normal",
+    "fault": 0,
+    "result": "PASS",
+    "kind": "host model"
+  },
+  {
+    "case": "overflow_recovery",
+    "fault": 0,
+    "result": "PASS",
+    "kind": "host model"
+  },
+  {
+    "case": "corrupt_frame",
+    "fault": 0,
+    "result": "PASS",
+    "kind": "host model"
+  },
+  {
+    "case": "bounded_queue",
+    "fault": 0,
+    "result": "PASS",
+    "kind": "host model"
+  },
+  {
+    "case": "command_timeout",
+    "fault": 1,
+    "result": "PASS",
+    "kind": "host model"
+  },
+  {
+    "case": "receive_timeout",
+    "fault": 2,
+    "result": "PASS",
+    "kind": "host model"
+  },
+  {
+    "case": "lost_end_ack",
+    "fault": 3,
+    "result": "PASS",
+    "kind": "host model"
+  }
+]

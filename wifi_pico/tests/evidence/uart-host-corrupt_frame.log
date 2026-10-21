@@ -1,0 +1,26 @@
+[UI] Sending CONFIG
+[P2] CONFIG acknowledged
+[UI] CONFIG acknowledged
+[UI] Requesting stored data
+[P2] REQUEST_DATA acknowledged
+[UART0] CRC/frame rejected
+
+[P1] Transfer timeout: retransmitted pending frame
+[P2] DATA block received and ACKed
+[P2] DATA block received and ACKed
+[P2] DATA block received and ACKed
+[P2] DATA block received and ACKed
+[P2] DATA block received and ACKed
+[P2] DATA block received and ACKed
+[P2] DATA block received and ACKed
+[P2] DATA block received and ACKed
+[P2] DATA block received and ACKed
+[P2] DATA block received and ACKed
+[P2] DATA block received and ACKed
+[P2] DATA block received and ACKed
+[P2] DATA block received and ACKed
+[P2] TRANSFER_END validated
+[TEST] Completed log matches emulator: bytes=100 completion_count=1
+[UI] Data retrieval complete
+[EMU] TRANSFER_END ACK received
+PASS: UART app host model corrupt_frame (fault=0)

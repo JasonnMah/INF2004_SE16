@@ -1,0 +1,9 @@
+RE] task=diag1 tk_prc=2 rp2040_core=1 heartbeat=30
+[CORE] task=diag0 tk_prc=1 rp2040_core=0 heartbeat=30
+[BOOT] INF2004 Wi-Fi Pico SMP boot milestone 1
+[BUILD] course=2e8e6ad480c2d84a369b12995694b9bf5e9ddfb3
+[BUILD] SMP=1 cores=2 console=USB_CDC UART0=FREE WIFI=none
+[CHECK] Both cores reported through kernel IPC (mask=0x3)
+[CORE] task=diag1 tk_prc=2 rp2040_core=1 heartbeat=31
+[CORE] task=diag0 tk_prc=1 rp2040_core=0 heartbeat=31
+[C

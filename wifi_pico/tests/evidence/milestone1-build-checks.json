@@ -1,0 +1,43 @@
+{
+  "validation_kind": "build/static-source checks only; no hardware or emulator execution",
+  "course_commit": "2e8e6ad480c2d84a369b12995694b9bf5e9ddfb3",
+  "tracked_upstream_files": 630,
+  "course_files_patched": [
+    "build_make/makefile",
+    "config/config.h",
+    "kernel/sysdepend/pico_rp2040/hw_setting.c"
+  ],
+  "uart_baseline_files_checked": 92,
+  "uart_baseline_changes": 0,
+  "import_audit_rows": 599,
+  "audit_dispositions": {
+    "same_as_pinned_source": 559,
+    "replaced_with_pinned_source": 31,
+    "replaced_with_pinned_source_project_patch_documented": 2,
+    "removed_old_template_only": 7
+  },
+  "actual_compile_commands_checked": 76,
+  "effective_macros": {
+    "CNF_SMP": "1",
+    "TK_SUPPORT_SMP": "1",
+    "TK_MAX_CORE": "2",
+    "TM_CONSOLE_USB_CDC": "1",
+    "TM_CONSOLE_UART": "0",
+    "USE_SDEV_DRV": "(0)"
+  },
+  "negative_configuration_checks": {
+    "single_core_rejected": "PASS",
+    "uart_console_rejected": "PASS",
+    "radio_rejected": "PASS"
+  },
+  "uart_console_init_empty_after_preprocessing": true,
+  "startup_gpio_table_empty_after_preprocessing": true,
+  "uart_driver_symbols_absent": true,
+  "compiler": "arm-none-eabi-gcc (15:13.2.rel1-2) 13.2.1 20231009",
+  "uf2_bytes": 116736,
+  "uf2_sha256": "efed93fe5def9562f06266a4a7d52284b91f1de7a18082ea7de10a1c5f23adab",
+  "elf_bytes": 1132128,
+  "elf_sha256": "44b2d9ce8de3ac08b1fe0f8bef78aa018e7aff56bf8fdee45b97de52acd89123",
+  "arm_none_eabi_size": "text\t   data\t    bss\t    dec\t    hex\tfilename\n  58109\t     36\t  27796\t  85941\t  14fb5\t/mnt/c/Embedded_Proj/INF2004_SE16/wifi_pico/course/build_make/wifi_pico_smp_boot.elf",
+  "physical_smp_status": "NOT TESTED; awaiting user USB transcript"
+}
