@@ -1,0 +1,15 @@
+{
+  "kind": "user-observed physical repeated upload plus PC-file inspection",
+  "http_status": 200,
+  "attempts": 1,
+  "upload_id": "log-508ce5ef84f333f067394c426c37e537693ab9224d29c117150c294e93cb72d4",
+  "bytes": 100,
+  "sha256": "508ce5ef84f333f067394c426c37e537693ab9224d29c117150c294e93cb72d4",
+  "exact_file_equality": "PASS",
+  "matching_files_in_receiver_root": [
+    "f6a67aec3fd78cfd6fa69d39439ca281be21a6166bd71842ee49346599c10a03.bin"
+  ],
+  "one_matching_fixture_file": true,
+  "monitor_reopen_preserved_waiting_snapshot": true,
+  "sensor_source": "temporary bare-metal probe RAM fixture"
+}

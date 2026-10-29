@@ -1,0 +1,15 @@
+{
+  "kind": "host UART tests with simulated wire/storage callbacks",
+  "result": "PASS",
+  "physical": "NOT TESTED",
+  "sensor_firmware": "unchanged; encoder and decoder read-only",
+  "baseline_protocol_assertions": "PASS",
+  "shared_reliability_groups_passed": 8,
+  "checks": [
+    "two unchanged-encoder pages transferred byte-for-byte",
+    "JZ decoder validates expected samples and page CHECKs",
+    "shared endpoints release source on completion, abort and retry exhaustion",
+    "CONFIG validation and rejected oversized source",
+    "simulated delayed CLEAR completion, lost ACK without repeated clear, failure NACK"
+  ]
+}

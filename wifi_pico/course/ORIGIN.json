@@ -169,11 +169,11 @@
     {
       "path": "build_make/makefile",
       "upstream_sha256": "2c55cefd9c0bc43457a814fa7175af06546906360b285d0c8e8237396aa83e03",
-      "vendored_sha256": "b0b11b33ac5fb46019331bd496007fd636c5d9bcb9e27c126f13c49bd28b9638",
+      "vendored_sha256": "ff5835b74296e34264d32839288370efff73bf79e85b6497cacedd6b5fbc6a56",
       "modified": true,
       "stored_path": "build_rules/makefile",
       "hash_mode": "text-lf",
-      "portable_sha256": "b0b11b33ac5fb46019331bd496007fd636c5d9bcb9e27c126f13c49bd28b9638"
+      "portable_sha256": "ff5835b74296e34264d32839288370efff73bf79e85b6497cacedd6b5fbc6a56"
     },
     {
       "path": "build_make/mtkernel_3/app_program/subdir.mk",
@@ -790,11 +790,11 @@
     {
       "path": "build_make/pico_rp2040.mk",
       "upstream_sha256": "2a03530c43ee047b24be0caa6da03f2d638f19657c0d06c67a00eceef916412d",
-      "vendored_sha256": "2a03530c43ee047b24be0caa6da03f2d638f19657c0d06c67a00eceef916412d",
-      "modified": false,
+      "vendored_sha256": "9a2991765474b93bda9e663e4c640eaf40c5976c3d2832313a4165b19a9b9b5a",
+      "modified": true,
       "stored_path": "build_rules/pico_rp2040.mk",
       "hash_mode": "text-lf",
-      "portable_sha256": "357115fc429d0abc5e55a1f9872be414098ee19aa3c5df3bc29522df5f382ab5"
+      "portable_sha256": "9a2991765474b93bda9e663e4c640eaf40c5976c3d2832313a4165b19a9b9b5a"
     },
     {
       "path": "build_make/tools/.gitkeep",
@@ -4584,10 +4584,10 @@
     {
       "path": "lib/libnet/lwip/include/lwipopts.h",
       "upstream_sha256": "73258c4e5c31154767b86451f58919645baec4c6ae30d0a7645c4588fc230c59",
-      "vendored_sha256": "73258c4e5c31154767b86451f58919645baec4c6ae30d0a7645c4588fc230c59",
-      "modified": false,
+      "vendored_sha256": "d837d71ec6ae4a28038fe5db9de01179fcd099ac4b3c37bb018b63e488759667",
+      "modified": true,
       "hash_mode": "text-lf",
-      "portable_sha256": "b7f72f2fd41bcf4f17af2739934d999a65d1ad7b281fd5bf321940381aabc937"
+      "portable_sha256": "d837d71ec6ae4a28038fe5db9de01179fcd099ac4b3c37bb018b63e488759667"
     },
     {
       "path": "lib/libnet/lwip/lwip_utk.c",
@@ -5024,10 +5024,10 @@
     {
       "path": "lib/libwifi/sysdepend/pico_rp2040/cyw43_utk.c",
       "upstream_sha256": "9786fbdba8d829778732cc315aa460601e6f1e2e72c7463bc4ddc1a9b116c95e",
-      "vendored_sha256": "9786fbdba8d829778732cc315aa460601e6f1e2e72c7463bc4ddc1a9b116c95e",
-      "modified": false,
+      "vendored_sha256": "deeeb0fc02c34ab28220b5f424a3cebda38566f19f0247c64134175e75d5c127",
+      "modified": true,
       "hash_mode": "text-lf",
-      "portable_sha256": "8963d3f539838fef23a7302e13fe74e349d34af8e9f31a65bc4440a7368f9dc4"
+      "portable_sha256": "8919c3864f27238a290bf1acb3657f2ec736495855eebf172a6f5a502a14a186"
     },
     {
       "path": "lib/libwifi/sysdepend/pico_rp2040/cyw43_utk.h",
@@ -5048,10 +5048,10 @@
     {
       "path": "lib/libwifi/sysdepend/pico_rp2040/cyw43_utk_kernel.c",
       "upstream_sha256": "22f3247efc6ab760e274bdb52afa087fe517de6b5a555677b6b7f7221148cce6",
-      "vendored_sha256": "22f3247efc6ab760e274bdb52afa087fe517de6b5a555677b6b7f7221148cce6",
-      "modified": false,
+      "vendored_sha256": "95795b1267bf3a344faf1d9455ab2fb0e7e39f9a3c8ed3e52ef48e1b93e2684f",
+      "modified": true,
       "hash_mode": "text-lf",
-      "portable_sha256": "ef71e0ad1d6b38e969437bc0d4da3771b60cc0f2203bca026488865230da28e3"
+      "portable_sha256": "95795b1267bf3a344faf1d9455ab2fb0e7e39f9a3c8ed3e52ef48e1b93e2684f"
     },
     {
       "path": "lib/libwifi/sysdepend/pico_rp2040/smp_compat.h",
@@ -5126,5 +5126,14 @@
       "portable_sha256": "b1a98126d3278be3af7ee03838b5cc0170907a80065f1d899ba7c22d9ceda769"
     }
   ],
-  "layout_note": "Logical upstream build_make recipes are stored as build_rules; wrappers copy them into ignored build_make. Original hashes retained; portable_sha256 normalizes text CRLF to LF."
+  "layout_note": "Logical upstream build_make recipes are stored as build_rules; wrappers copy them into ignored build_make. Original hashes retained; portable_sha256 normalizes text CRLF to LF.",
+  "local_patches": [
+    "../patches/milestone1-board-config.patch",
+    "../patches/http-owner-hook.patch",
+    "../patches/layout-cleanup.patch",
+    "../patches/http-network-diagnostics.patch",
+    "../patches/http-network-retries.patch",
+    "../patches/http-nonet-window.patch",
+    "../patches/combined-application.patch"
+  ]
 }

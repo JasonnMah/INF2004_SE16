@@ -1,0 +1,46 @@
+--- a/lib/libwifi/sysdepend/pico_rp2040/cyw43_utk.c
++++ b/lib/libwifi/sysdepend/pico_rp2040/cyw43_utk.c
+@@ -73,7 +73,7 @@
+  * from two different updates.  Odd means a publication is in progress. */
+ #if TM_APP_HTTP
+ /* App extension stays inside the sole raw-lwIP execution context. */
+-extern void cyw43_utk_app_poll(struct netif *netif);
++extern int cyw43_utk_app_poll(struct netif *netif);
+ extern void cyw43_utk_app_scan(const cyw43_ev_scan_result_t *result);
+ #endif
+ static volatile uint32_t status_version;
+@@ -619,7 +619,33 @@
+ #endif
+         status_publish_end();
+ #if TM_APP_HTTP
+-        cyw43_utk_app_poll(&cyw43_state.netif[CYW43_ITF_STA]);
++        if(cyw43_utk_app_poll(&cyw43_state.netif[CYW43_ITF_STA])) {
++            /* HTTP startup-only retry request. Still inside the sole radio
++             * owner and its driver lock; no networking from UI/core 1.
++             * Failed scan/disassociate calls stop retries via init_result.
++             */
++            status_publish_begin();
++            radio_status.scan_count = 0;
++            radio_status.strongest_rssi = -32768;
++            radio_status.scan_complete = 0;
++            radio_status.join_started = 0;
++            radio_status.join_complete = 0;
++            radio_status.join_request_result = -5;
++            radio_status.join_result = -5;
++            radio_status.link_up = 0;
++            radio_status.link_status = CYW43_LINK_DOWN;
++            radio_status.join_elapsed_ms = 0;
++            result = cyw43_wifi_leave(&cyw43_state, CYW43_ITF_STA);
++            if(result == 0) {
++                options = (cyw43_wifi_scan_options_t){0};
++                result = cyw43_wifi_scan(&cyw43_state, &options,
++                                         &radio_status, scan_result);
++            }
++            radio_status.init_result = result;
++            radio_status.ready = (result == 0);
++            radio_status.scan_active = (result == 0);
++            status_publish_end();
++        }
+ #endif
+         cyw43_utk_poll_requested = 0;
+         cyw43_thread_exit();

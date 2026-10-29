@@ -1,0 +1,17 @@
+{
+  "kind": "user-observed physical receiver-outage recovery plus PC-file equality",
+  "prior_failure_attempts": 3,
+  "recovery_http_status": 200,
+  "recovery_attempts": 1,
+  "recovery_button_presses": 1,
+  "new_uart_retrieval_in_recovery_capture": false,
+  "same_upload_id": "log-508ce5ef84f333f067394c426c37e537693ab9224d29c117150c294e93cb72d4",
+  "bytes": 100,
+  "sha256": "508ce5ef84f333f067394c426c37e537693ab9224d29c117150c294e93cb72d4",
+  "pc_reported_result": "duplicate",
+  "exact_binary_equality": "PASS",
+  "matching_files_in_normal_receiver_root": [
+    "f6a67aec3fd78cfd6fa69d39439ca281be21a6166bd71842ee49346599c10a03.bin"
+  ],
+  "source": "temporary Sensor probe RAM fixture; not live AHT10"
+}

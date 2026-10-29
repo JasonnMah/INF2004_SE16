@@ -1,0 +1,19 @@
+{
+  "kind": "user-observed physical lost-HTTP-receipt test plus PC-file inspection",
+  "http_status": 200,
+  "attempts": 2,
+  "pc_reported_events": [
+    "stored",
+    "receipt dropped once after storage",
+    "duplicate"
+  ],
+  "bytes": 100,
+  "sha256": "508ce5ef84f333f067394c426c37e537693ab9224d29c117150c294e93cb72d4",
+  "upload_id": "log-508ce5ef84f333f067394c426c37e537693ab9224d29c117150c294e93cb72d4",
+  "stored_files": 1,
+  "temporary_files": 0,
+  "exact_binary_equality": "PASS",
+  "path": "C:\\Embedded_Proj\\INF2004_SE16\\http_received\\lost_receipt_test\\f6a67aec3fd78cfd6fa69d39439ca281be21a6166bd71842ee49346599c10a03.bin",
+  "source": "100-byte fixture from temporary bare-metal Sensor probe; not live AHT10",
+  "initial_one_attempt_200_in_serial_excerpt": "not used as fault-case evidence; relative ordering with PC receiver restart unestablished"
+}

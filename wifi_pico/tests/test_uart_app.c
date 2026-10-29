@@ -5,9 +5,13 @@
 #include <string.h>
 #include "app.h"
 #include "rx_ring.h"
-#include "ui_logic.h"
-#include "protocol_io.h"
+#include "buttons.h"
+#include "uart_io.h"
 #include "pico2/pico2_protocol.h"
+#if !APP_SENSOR_EMULATOR
+#include "pico1/pico1_protocol.h"
+#include "lab_capture.h"
+#endif
 static rx_ring_t channels[2];
 static unsigned long long now;
 static app_message_t commands[APP_QUEUE_DEPTH], statuses[APP_QUEUE_DEPTH];
@@ -15,6 +19,29 @@ static unsigned ch, ct, cc, sh, st, sc;
 static unsigned config_sends, end_sends, final_acks;
 static uint16_t end_sequence;
 static bool corrupt_first_data, corrupted;
+#if !APP_SENSOR_EMULATOR
+/* Host-only external peer; never linked into the two-board ARM image. */
+static pico1_ctx_t external_sensor;
+static stream_parser_t external_parser;
+static unsigned char external_bytes[APP_RECEIVE_CAPACITY + 8];
+static bool lose_first_final_ack, final_ack_lost;
+static void external_frame(const protocol_frame_t *f) { pico1_handle_frame(&external_sensor, f); }
+static void test_peer_init(void)
+{
+    for (unsigned i=0; i<sizeof(external_bytes); ++i) { external_bytes[i]=(unsigned char)i; }
+    stream_parser_init(&external_parser);
+    assert(pico1_init(&external_sensor,app_protocol_link(1),
+                     external_bytes,300,(pico1_hooks_t){0}));
+}
+static void test_peer_step(void)
+{
+    (void)protocol_receive(1,&external_parser,external_frame);
+    pico1_tick(&external_sensor);
+}
+#else
+#define test_peer_init sensor_emulator_init
+#define test_peer_step sensor_emulator_step
+#endif
 unsigned long long rt_now_ms(void) { return now; }
 void rt_sleep(unsigned ms) { now += ms; }
 void rt_log(const char *s) { fputs(s, stdout); }
@@ -60,6 +87,12 @@ void rt_uart_write(unsigned u, const unsigned char *bytes, unsigned length)
     }
     if (u==0 && frame.message_type==MSG_ACK && end_sends &&
         read_u16_le(frame.payload)==end_sequence) { ++final_acks; }
+#if !APP_SENSOR_EMULATOR
+    if (u==0 && frame.message_type==MSG_ACK && end_sends &&
+        read_u16_le(frame.payload)==end_sequence && lose_first_final_ack && !final_ack_lost) {
+        final_ack_lost=true; --final_acks; return;
+    }
+#endif
     unsigned char scratch[MAX_STUFFED_FRAME_SIZE];
     if (u==1 && frame.message_type==MSG_DATA && corrupt_first_data && !corrupted) {
         memcpy(scratch,bytes,length); scratch[1]^=0x10; bytes=scratch; corrupted=true;
@@ -69,7 +102,7 @@ void rt_uart_write(unsigned u, const unsigned char *bytes, unsigned length)
 static void pump(unsigned ms)
 {
     for (unsigned i=0;i<ms;i+=10) {
-        communication_step(); sensor_emulator_step();
+        communication_step(); test_peer_step();
         /* Model the Status Task consuming messages; LED timing tested separately. */
         app_message_t m; while (rt_status_take(&m)) {}
         now += 10;
@@ -85,7 +118,10 @@ static void init(void)
     config_sends=end_sends=final_acks=0; end_sequence=0;
     corrupted=corrupt_first_data=false;
     rx_ring_init(&channels[0]); rx_ring_init(&channels[1]);
-    fault_reset(); communication_init(); sensor_emulator_init();
+#if APP_FAULT_INJECTION
+    fault_reset();
+#endif
+    communication_init(); test_peer_init();
 }
 static void configured(void)
 {
@@ -133,6 +169,60 @@ int main(int argc,char **argv)
 {
     assert(argc==2);
     primitives(); init();
+#if !APP_SENSOR_EMULATOR
+    configured();
+    if (!strcmp(argv[1],"external_receive_timeout") || !strcmp(argv[1],"external_empty_timeout")) {
+        assert(UART_FAULT == 2);
+        unsigned length = !strcmp(argv[1],"external_empty_timeout") ? 0u : 300u;
+        external_sensor.logger_data_length=length;
+        press(APP_RETRIEVE); pump(2400);
+        communication_snapshot_t state=communication_snapshot();
+        /* REQUEST was ACKed: this is receive inactivity, not command ACK failure. */
+        assert(state.state==P2_RECEIVING_DATA && !state.valid && !state.completions);
+        assert(channels[0].stats.bytes_seen>17 && !channels[0].stats.dropped);
+        pump(300); state=communication_snapshot();
+        assert(state.state==P2_FAILED && !state.valid && !state.length && !state.completions);
+        assert(!external_sensor.pending_transfer.active && !lab_capture_active());
+        pump(700); press(APP_RETRIEVE); pump(2500); valid_log(length,1);
+        pump(1500); valid_log(length,1); /* No late or duplicate completion. */
+    } else if (!strcmp(argv[1],"external_injected_end_ack") || !strcmp(argv[1],"external_empty_end_ack")) {
+        assert(UART_FAULT == 3);
+        unsigned length = !strcmp(argv[1],"external_empty_end_ack") ? 0u : 300u;
+        external_sensor.logger_data_length=length;
+        press(APP_RETRIEVE); pump(3000); valid_log(length,1);
+        assert(end_sends==2 && final_acks==1 && !external_sensor.pending_transfer.active);
+        pump(2000); valid_log(length,1);
+    } else if (!strcmp(argv[1],"external_binary")) {
+        press(APP_RETRIEVE); pump(2500); valid_log(300,1);
+    } else if (!strcmp(argv[1],"external_capture_busy")) {
+        press(APP_RETRIEVE);
+        unsigned iterations=0;
+        while (!communication_snapshot().completions && iterations++<500) { pump(10); }
+        valid_log(300,1); assert(lab_capture_active());
+        press(APP_CLEAR); pump(10);
+        assert(external_sensor.logger_data_length==300); /* Captured bytes stay owned. */
+        pump(1000); assert(!lab_capture_active());
+        press(APP_CLEAR); pump(1000); assert(external_sensor.logger_data_length==0);
+    } else if (!strcmp(argv[1],"external_lost_end_ack")) {
+        lose_first_final_ack=true;
+        press(APP_RETRIEVE); pump(3000); valid_log(300,1);
+        assert(final_ack_lost && end_sends==2 && final_acks==1);
+        pump(1500); valid_log(300,1);
+    } else if (!strcmp(argv[1],"external_capacity_recovery")) {
+        external_sensor.logger_data_length=sizeof(external_bytes);
+        press(APP_RETRIEVE); pump(5000);
+        assert(communication_snapshot().state==P2_FAILED && !communication_snapshot().valid);
+        assert(!communication_snapshot().length && !communication_snapshot().completions);
+        external_sensor.logger_data_length=300;
+        press(APP_RETRIEVE); pump(2500); valid_log(300,1);
+    } else if (!strcmp(argv[1],"external_empty")) {
+        press(APP_CLEAR); pump(1000);
+        press(APP_RETRIEVE); pump(1000); valid_log(0,1);
+    } else if (!strcmp(argv[1],"external_maximum")) {
+        external_sensor.logger_data_length=APP_RECEIVE_CAPACITY;
+        press(APP_RETRIEVE); pump(5000); valid_log(APP_RECEIVE_CAPACITY,1);
+    } else { assert(!"unknown external case"); }
+#else
     if (!strcmp(argv[1],"normal")) {
         press(APP_RETRIEVE); pump(100); assert(!communication_snapshot().configured);
         configured(); press(APP_RETRIEVE); pump(1500); valid_log(100,1);
@@ -154,7 +244,7 @@ int main(int argc,char **argv)
         pump(2000); valid_log(100,1);
     } else if (!strcmp(argv[1],"overflow_recovery")) {
         configured(); press(APP_RETRIEVE);
-        communication_step(); sensor_emulator_step();
+        communication_step(); test_peer_step();
         rx_ring_fault(&channels[0],RX_FAULT_OVERFLOW);
         pump(2400);
         assert(communication_snapshot().state==P2_FAILED && !communication_snapshot().valid);
@@ -170,6 +260,7 @@ int main(int argc,char **argv)
         assert(!rt_command_send(&m)); pump(1100);
         assert(config_sends==1 && communication_snapshot().configured);
     } else { assert(!"unknown case"); }
+#endif
     printf("PASS: UART app host model %s (fault=%d)\n",argv[1],UART_FAULT);
     return 0;
 }

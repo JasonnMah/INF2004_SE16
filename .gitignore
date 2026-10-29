@@ -34,3 +34,7 @@ build.ninja
 **/config/tcp_test_config.h
 *.pem
 *.key
+
+# HTTP settings and PC test output are local
+**/config/http_test.local.h
+**/http_received/

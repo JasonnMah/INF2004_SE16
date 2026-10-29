@@ -1,0 +1,117 @@
+--- a/build_rules/makefile
++++ b/build_rules/makefile
+@@ -66,6 +66,13 @@
+ include ../../uart_milestone.mk
+ endif
+ 
++ifeq ($(INF2004_HTTP),1)
++ifneq ($(filter 1,$(INF2004_UART) $(INF2004_MILESTONE1)),)
++$(error Select one project application profile)
++endif
++include ../../http_milestone.mk
++endif
++
+ ifneq ($(MAKECMDGOALS),clean)
+ ifneq ($(strip $(ASM_DEPS)),)
+ -include $(ASM_DEPS)
+--- a/build_rules/pico_rp2040.mk
++++ b/build_rules/pico_rp2040.mk
+@@ -152,8 +152,10 @@
+ ifneq ($(WIFI),cyw43)
+ $(error WIFI_JOIN=1 requires WIFI=cyw43)
+ endif
++ifneq ($(INF2004_HTTP),1)
+ ifeq ($(wildcard ../config/wifi_credentials.h),)
+ $(error WIFI_JOIN=1 needs config/wifi_credentials.h; copy it from config/wifi_credentials.example.h and add local credentials)
++endif
+ endif
+ endif
+ 
+--- a/lib/libnet/lwip/include/lwipopts.h
++++ b/lib/libnet/lwip/include/lwipopts.h
+@@ -22,7 +22,7 @@
+ #define LWIP_ICMP                       (TM_WIFI_STATIC || TM_WIFI_DHCP)
+ #define LWIP_RAW                        (TM_WIFI_STATIC || TM_WIFI_DHCP)
+ #define LWIP_UDP                        TM_WIFI_DHCP
+-#define LWIP_TCP                        TM_WIFI_TCP
++#define LWIP_TCP                        (TM_WIFI_TCP || TM_APP_HTTP)
+ /* The altcp shim is only needed by application protocols written against it
+  * Nothing in this tree uses it; turn it on here if you add something that
+  * does. */
+@@ -41,7 +41,7 @@
+ #define LWIP_NETIF_EXT_STATUS_CALLBACK  0
+ 
+ #define MEM_ALIGNMENT                   4
+-#if TM_WIFI_TCP
++#if TM_WIFI_TCP || TM_APP_HTTP
+ #define MEM_SIZE                        (12 * 1024)
+ #else
+ #define MEM_SIZE                        (8 * 1024)
+@@ -54,7 +54,7 @@
+ /* Phase 7 opens exactly one outbound connection and never listens.  The
+  * send window stays small on purpose: the gate is stop-and-wait, so a large
+  * window would only cost RAM the kernel qualification also needs. */
+-#if TM_WIFI_TCP
++#if TM_WIFI_TCP || TM_APP_HTTP
+ /* Each finished connection lingers in TIME_WAIT for 2MSL while still holding
+  * a pool entry, and the cumulative image now opens two connections in
+  * sequence (Phase 7, then Phase 8).  Two entries would force lwIP to
+--- a/lib/libwifi/sysdepend/pico_rp2040/cyw43_utk.c
++++ b/lib/libwifi/sysdepend/pico_rp2040/cyw43_utk.c
+@@ -44,7 +44,11 @@
+ #define CYW43_DNS_TIMEOUT_US  30000000ULL
+ 
+ #if TM_WIFI_JOIN
++#if TM_APP_HTTP
++#include "http_test_config.h"
++#else
+ #include "wifi_credentials.h"
++#endif
+ 
+ static const uint8_t wifi_ssid[] = UTK_WIFI_SSID;
+ static const uint8_t wifi_password[] = UTK_WIFI_PASSWORD;
+@@ -67,6 +71,10 @@
+  * field on processor 1 while the qualification harness reads the whole
+  * structure from the other processor, so an unguarded copy can mix fields
+  * from two different updates.  Odd means a publication is in progress. */
++#if TM_APP_HTTP
++/* App extension stays inside the sole raw-lwIP execution context. */
++extern void cyw43_utk_app_poll(struct netif *netif);
++#endif
+ static volatile uint32_t status_version;
+ static volatile uint32_t status_read_retries;
+ 
+@@ -500,7 +508,12 @@
+      * waking a failed high-rate service must not interfere with USB or the
+      * rest of the kernel qualification. */
+     if(result != 0) {
+-        for(;;) (void)tk_dly_tsk(1000);
++        for(;;) {
++#if TM_APP_HTTP
++            cyw43_utk_app_poll(&cyw43_state.netif[CYW43_ITF_STA]);
++#endif
++            (void)tk_dly_tsk(1000);
++        }
+     }
+ 
+     for(;;) {
+@@ -543,7 +556,9 @@
+         update_bulk_status();
+ #endif
+ #if TM_WIFI_STATIC || TM_WIFI_DHCP
++#if !TM_APP_HTTP
+         lwip_utk_ipv4_poll(&cyw43_state.netif[CYW43_ITF_STA]);
++#endif
+         update_ipv4_status();
+ #endif
+         radio_status.poll_count++;
+@@ -598,6 +613,9 @@
+         }
+ #endif
+         status_publish_end();
++#if TM_APP_HTTP
++        cyw43_utk_app_poll(&cyw43_state.netif[CYW43_ITF_STA]);
++#endif
+         cyw43_utk_poll_requested = 0;
+         cyw43_thread_exit();
+         (void)tk_dly_tsk(CYW43_POLL_MS);

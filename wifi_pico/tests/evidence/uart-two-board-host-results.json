@@ -1,0 +1,72 @@
+[
+  {
+    "case": "external_binary",
+    "fault": 0,
+    "result": "PASS",
+    "binary_bytes_compared": 300,
+    "kind": "host model"
+  },
+  {
+    "case": "external_capture_busy",
+    "fault": 0,
+    "result": "PASS",
+    "binary_bytes_compared": 300,
+    "kind": "host model"
+  },
+  {
+    "case": "external_lost_end_ack",
+    "fault": 0,
+    "result": "PASS",
+    "binary_bytes_compared": 300,
+    "kind": "host model"
+  },
+  {
+    "case": "external_capacity_recovery",
+    "fault": 0,
+    "result": "PASS",
+    "binary_bytes_compared": 300,
+    "kind": "host model"
+  },
+  {
+    "case": "external_empty",
+    "fault": 0,
+    "result": "PASS",
+    "binary_bytes_compared": 0,
+    "kind": "host model"
+  },
+  {
+    "case": "external_maximum",
+    "fault": 0,
+    "result": "PASS",
+    "binary_bytes_compared": 1024,
+    "kind": "host model"
+  },
+  {
+    "case": "external_receive_timeout",
+    "fault": 2,
+    "result": "PASS",
+    "binary_bytes_compared": 300,
+    "kind": "host model"
+  },
+  {
+    "case": "external_empty_timeout",
+    "fault": 2,
+    "result": "PASS",
+    "binary_bytes_compared": 0,
+    "kind": "host model"
+  },
+  {
+    "case": "external_injected_end_ack",
+    "fault": 3,
+    "result": "PASS",
+    "binary_bytes_compared": 300,
+    "kind": "host model"
+  },
+  {
+    "case": "external_empty_end_ack",
+    "fault": 3,
+    "result": "PASS",
+    "binary_bytes_compared": 0,
+    "kind": "host model"
+  }
+]

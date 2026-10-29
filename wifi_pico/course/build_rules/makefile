@@ -57,13 +57,24 @@ endif
 
 # Project profile must be loaded before prerequisites are expanded.
 ifeq ($(INF2004_MILESTONE1),1)
-include ../../milestone1.mk
+include ../../config/boot.mk
 endif
 ifeq ($(INF2004_UART),1)
 ifeq ($(INF2004_MILESTONE1),1)
 $(error Select one project application profile)
 endif
-include ../../uart_milestone.mk
+include ../../config/uart.mk
+endif
+
+ifeq ($(INF2004_HTTP),1)
+ifneq ($(filter 1,$(INF2004_UART) $(INF2004_MILESTONE1)),)
+$(error Select one project application profile)
+endif
+ifeq ($(APP_COMBINED),1)
+include ../../config/combined.mk
+else
+include ../../config/http.mk
+endif
 endif
 
 ifneq ($(MAKECMDGOALS),clean)

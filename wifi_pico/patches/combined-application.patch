@@ -1,0 +1,29 @@
+--- a/build_rules/makefile
++++ b/build_rules/makefile
+@@ -70,7 +70,11 @@
+ ifneq ($(filter 1,$(INF2004_UART) $(INF2004_MILESTONE1)),)
+ $(error Select one project application profile)
+ endif
++ifeq ($(APP_COMBINED),1)
++include ../../config/combined.mk
++else
+ include ../../config/http.mk
++endif
+ endif
+ 
+ ifneq ($(MAKECMDGOALS),clean)
+--- a/lib/libwifi/sysdepend/pico_rp2040/cyw43_utk_kernel.c
++++ b/lib/libwifi/sysdepend/pico_rp2040/cyw43_utk_kernel.c
+@@ -14,7 +14,12 @@
+ /* USB CDC drains at priority 3 on the same physical core.  Keep radio polling
+  * below it so firmware download and the 2 ms poll cadence cannot overflow the
+  * console ring, while remaining well above the qualification task. */
++#if APP_COMBINED
++/* UART Communication is priority 4; the radio yields for each 2 ms poll. */
++#define CYW43_TASK_PRIORITY  6
++#else
+ #define CYW43_TASK_PRIORITY  4
++#endif
+ #define CYW43_TASK_STACK     (6 * 1024)
+ 
+ EXPORT ER cyw43_utk_start(void)

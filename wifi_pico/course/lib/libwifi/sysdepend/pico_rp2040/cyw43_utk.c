@@ -44,7 +44,14 @@
 #define CYW43_DNS_TIMEOUT_US  30000000ULL
 
 #if TM_WIFI_JOIN
+#if TM_APP_HTTP
+#include "http_test_config.h"
+#include "network_retry.h"
+_Static_assert(WIFI_JOIN_WINDOW_US == CYW43_JOIN_TIMEOUT_US,
+               "HTTP NONET retries must preserve the course join deadline");
+#else
 #include "wifi_credentials.h"
+#endif
 
 static const uint8_t wifi_ssid[] = UTK_WIFI_SSID;
 static const uint8_t wifi_password[] = UTK_WIFI_PASSWORD;
@@ -67,6 +74,11 @@ extern uint64_t time_us_64(void);
  * field on processor 1 while the qualification harness reads the whole
  * structure from the other processor, so an unguarded copy can mix fields
  * from two different updates.  Odd means a publication is in progress. */
+#if TM_APP_HTTP
+/* App extension stays inside the sole raw-lwIP execution context. */
+extern int cyw43_utk_app_poll(struct netif *netif);
+extern void cyw43_utk_app_scan(const cyw43_ev_scan_result_t *result);
+#endif
 static volatile uint32_t status_version;
 static volatile uint32_t status_read_retries;
 
@@ -439,6 +451,10 @@ static int scan_result(void *env, const cyw43_ev_scan_result_t *result)
 
     if(result == NULL) return 0;
     status->scan_count++;
+#if TM_APP_HTTP
+    /* Copy test diagnostics in the existing radio task, never in an ISR. */
+    cyw43_utk_app_scan(result);
+#endif
     if(result->rssi > status->strongest_rssi) {
         status->strongest_rssi = result->rssi;
     }
@@ -452,6 +468,9 @@ void cyw43_utk_task(int32_t stacd, void *exinf)
     bool was_scanning;
 #if TM_WIFI_JOIN
     uint64_t join_started_us = 0;
+#if TM_APP_HTTP
+    uint64_t last_join_request_us = 0;
+#endif
 #endif
 
     (void)stacd;
@@ -500,7 +519,12 @@ void cyw43_utk_task(int32_t stacd, void *exinf)
      * waking a failed high-rate service must not interfere with USB or the
      * rest of the kernel qualification. */
     if(result != 0) {
-        for(;;) (void)tk_dly_tsk(1000);
+        for(;;) {
+#if TM_APP_HTTP
+            cyw43_utk_app_poll(&cyw43_state.netif[CYW43_ITF_STA]);
+#endif
+            (void)tk_dly_tsk(1000);
+        }
     }
 
     for(;;) {
@@ -543,7 +567,9 @@ void cyw43_utk_task(int32_t stacd, void *exinf)
         update_bulk_status();
 #endif
 #if TM_WIFI_STATIC || TM_WIFI_DHCP
+#if !TM_APP_HTTP
         lwip_utk_ipv4_poll(&cyw43_state.netif[CYW43_ITF_STA]);
+#endif
         update_ipv4_status();
 #endif
         radio_status.poll_count++;
@@ -557,6 +583,9 @@ void cyw43_utk_task(int32_t stacd, void *exinf)
             radio_status.link_up = 0;
             radio_status.link_status = CYW43_LINK_DOWN;
             join_started_us = time_us_64();
+#if TM_APP_HTTP
+            last_join_request_us = join_started_us;
+#endif
             result = cyw43_wifi_join(&cyw43_state,
                                      sizeof(wifi_ssid) - 1, wifi_ssid,
                                      sizeof(wifi_password) - 1, wifi_password,
@@ -586,6 +615,30 @@ void cyw43_utk_task(int32_t stacd, void *exinf)
                 radio_status.join_result = 0;
                 mp_memory_barrir();
                 radio_status.join_complete = 1;
+#if TM_APP_HTTP
+            } else if(link == CYW43_LINK_NONET) {
+                /* SDK 2.2.0 also resubmits NONET until its connection deadline.
+                 * Keep the kernel task responsive and never restart that timer.
+                 * Authentication/other terminal errors retain their old path.
+                 */
+                network_join_action_t action = network_join_step(join_started_us,
+                        last_join_request_us, now, true);
+                if(action == NETWORK_JOIN_EXPIRED) {
+                    radio_status.join_result = -CYW43_ETIMEDOUT;
+                    radio_status.join_complete = 1;
+                } else if(action == NETWORK_JOIN_RESUBMIT) {
+                    last_join_request_us = now;
+                    result = cyw43_wifi_join(&cyw43_state,
+                            sizeof(wifi_ssid) - 1, wifi_ssid,
+                            sizeof(wifi_password) - 1, wifi_password,
+                            UTK_WIFI_AUTH, NULL, CYW43_CHANNEL_NONE);
+                    radio_status.join_request_result = result;
+                    if(result != 0) {
+                        radio_status.join_result = result;
+                        radio_status.join_complete = 1;
+                    }
+                }
+#endif
             } else if(link < CYW43_LINK_DOWN) {
                 radio_status.join_result = link;
                 mp_memory_barrir();
@@ -598,6 +651,35 @@ void cyw43_utk_task(int32_t stacd, void *exinf)
         }
 #endif
         status_publish_end();
+#if TM_APP_HTTP
+        if(cyw43_utk_app_poll(&cyw43_state.netif[CYW43_ITF_STA])) {
+            /* HTTP startup-only retry request. Still inside the sole radio
+             * owner and its driver lock; no networking from UI/core 1.
+             * Failed scan/disassociate calls stop retries via init_result.
+             */
+            status_publish_begin();
+            radio_status.scan_count = 0;
+            radio_status.strongest_rssi = -32768;
+            radio_status.scan_complete = 0;
+            radio_status.join_started = 0;
+            radio_status.join_complete = 0;
+            radio_status.join_request_result = -5;
+            radio_status.join_result = -5;
+            radio_status.link_up = 0;
+            radio_status.link_status = CYW43_LINK_DOWN;
+            radio_status.join_elapsed_ms = 0;
+            result = cyw43_wifi_leave(&cyw43_state, CYW43_ITF_STA);
+            if(result == 0) {
+                options = (cyw43_wifi_scan_options_t){0};
+                result = cyw43_wifi_scan(&cyw43_state, &options,
+                                         &radio_status, scan_result);
+            }
+            radio_status.init_result = result;
+            radio_status.ready = (result == 0);
+            radio_status.scan_active = (result == 0);
+            status_publish_end();
+        }
+#endif
         cyw43_utk_poll_requested = 0;
         cyw43_thread_exit();
         (void)tk_dly_tsk(CYW43_POLL_MS);

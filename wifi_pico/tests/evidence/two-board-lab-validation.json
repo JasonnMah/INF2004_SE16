@@ -1,0 +1,181 @@
+{
+  "prepared_date": "2026-10-22",
+  "branch": "feature/wifi-t-kernel-smp",
+  "base_commit": "0c7eaf33280c3548a019f344cc600141c1010fa0",
+  "course_commit": "2e8e6ad480c2d84a369b12995694b9bf5e9ddfb3",
+  "two_board_build": {
+    "result": "PASS",
+    "sensor_emulator": false,
+    "application_tasks": [
+      "UART Communication",
+      "UI",
+      "Status Indicator"
+    ],
+    "future_fourth_task": "Wi-Fi/HTTP Upload (not implemented)",
+    "uf2": "wifi_pico/course/build_make/wifi_pico_uart_two_board.uf2",
+    "uf2_sha256": "632bfe85bbe8363268c93cf710a0a558a4a07081407d4cd0555ad0830641468a",
+    "uf2_bytes": 135680,
+    "effective_macros": {
+      "CNF_SMP": "1",
+      "TK_MAX_CORE": "2",
+      "TM_CONSOLE_USB_CDC": "1",
+      "TM_CONSOLE_UART": "0",
+      "USE_SDEV_DRV": "(0)",
+      "UART_FAULT": "0",
+      "APP_SENSOR_EMULATOR": "0"
+    }
+  },
+  "preserved_loopback_build": {
+    "result": "PASS",
+    "uf2_sha256": "0df33b5352814757c65a6129698ac1c60b70a2ac16c71153911036fba37a2638"
+  },
+  "host_application_cases": [
+    {
+      "case": "normal",
+      "fault": 0,
+      "result": "PASS",
+      "kind": "host model"
+    },
+    {
+      "case": "overflow_recovery",
+      "fault": 0,
+      "result": "PASS",
+      "kind": "host model"
+    },
+    {
+      "case": "corrupt_frame",
+      "fault": 0,
+      "result": "PASS",
+      "kind": "host model"
+    },
+    {
+      "case": "bounded_queue",
+      "fault": 0,
+      "result": "PASS",
+      "kind": "host model"
+    },
+    {
+      "case": "command_timeout",
+      "fault": 1,
+      "result": "PASS",
+      "kind": "host model"
+    },
+    {
+      "case": "receive_timeout",
+      "fault": 2,
+      "result": "PASS",
+      "kind": "host model"
+    },
+    {
+      "case": "lost_end_ack",
+      "fault": 3,
+      "result": "PASS",
+      "kind": "host model"
+    }
+  ],
+  "host_external_profile_cases": [
+    {
+      "case": "external_binary",
+      "result": "PASS",
+      "binary_bytes_compared": 300,
+      "kind": "host model"
+    },
+    {
+      "case": "external_capture_busy",
+      "result": "PASS",
+      "binary_bytes_compared": 300,
+      "kind": "host model"
+    },
+    {
+      "case": "external_lost_end_ack",
+      "result": "PASS",
+      "binary_bytes_compared": 300,
+      "kind": "host model"
+    },
+    {
+      "case": "external_capacity_recovery",
+      "result": "PASS",
+      "binary_bytes_compared": 300,
+      "kind": "host model"
+    },
+    {
+      "case": "external_empty",
+      "result": "PASS",
+      "binary_bytes_compared": 0,
+      "kind": "host model"
+    },
+    {
+      "case": "external_maximum",
+      "result": "PASS",
+      "binary_bytes_compared": 1024,
+      "kind": "host model"
+    }
+  ],
+  "capture_comparison_tests": {
+    "parser_unit_cases": 8,
+    "result": "PASS",
+    "cli_equal_input": "PASS",
+    "cli_different_source_rejected": "PASS"
+  },
+  "baseline_host": {
+    "protocol": "PASS",
+    "reliability_groups": 8,
+    "reliability": "PASS",
+    "ui": "PASS"
+  },
+  "baseline_build_local_emulator": [
+    {
+      "mode": 0,
+      "name": "happy_path",
+      "build": "PASS",
+      "local_emulator": "PASS",
+      "wokwi": "NOT RUN",
+      "baseline_uart_bytes": "IDENTICAL (both UARTs)",
+      "binary_sha256": "4ac4f4e6966d3c27f8d602000816c18348c510ee743fed275c7351b7f7601b06"
+    },
+    {
+      "mode": 1,
+      "name": "corrupt_first_data",
+      "build": "PASS",
+      "local_emulator": "PASS",
+      "wokwi": "NOT RUN",
+      "baseline_uart_bytes": "IDENTICAL (both UARTs)",
+      "binary_sha256": "fab332e176538263ec7e33fd477d59bbef910d2507b95e414787880a34731bdc"
+    },
+    {
+      "mode": 2,
+      "name": "drop_first_data_ack",
+      "build": "PASS",
+      "local_emulator": "PASS",
+      "wokwi": "NOT RUN",
+      "baseline_uart_bytes": "IDENTICAL (both UARTs)",
+      "binary_sha256": "92bf6b94cae17ddf0af9973b5810187b3ff955a45000015de675972dd7a77d44"
+    },
+    {
+      "mode": 3,
+      "name": "wrong_first_block",
+      "build": "PASS",
+      "local_emulator": "PASS",
+      "wokwi": "NOT RUN",
+      "baseline_uart_bytes": "IDENTICAL (both UARTs)",
+      "binary_sha256": "f832ef0d0f3c14943873acae4e1003b54b92c165927af8a9706f71eaff050f14"
+    },
+    {
+      "mode": 4,
+      "name": "drop_config_ack",
+      "build": "PASS",
+      "local_emulator": "PASS",
+      "wokwi": "NOT RUN",
+      "baseline_uart_bytes": "IDENTICAL (both UARTs)",
+      "binary_sha256": "c03e68ceaf85fe7656e4a5bdd3c7494ed267c3942270905c14ca3ea1e08b2038"
+    }
+  ],
+  "baseline_files_sha256_checked": 86,
+  "baseline_changes": 0,
+  "course_source_changes": 0,
+  "new_physical_two_board_result": "NOT TESTED",
+  "actual_jz_firmware_source": "Not present; pinout/interface require JZ confirmation",
+  "http": "NOT IMPLEMENTED / NOT TESTED",
+  "wokwi_this_work": "NOT RUN",
+  "physical_evidence_scope": "Existing user-observed SMP boot and bare-metal single-board records preserved; no new hardware evidence generated."
+}
