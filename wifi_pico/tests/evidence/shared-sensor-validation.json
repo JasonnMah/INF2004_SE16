@@ -1,0 +1,301 @@
+{
+  "date": "2026-10-22",
+  "kind": "builds and host/local emulator evidence; no new physical tests",
+  "branch": "feature/wifi-t-kernel-smp",
+  "input_commit": "3b461a58ca7f9eab59dd5eacc984aef84fe69ffd",
+  "working_changes_snapshot": "%TEMP%/inf2004-pre-shared-uart-20261022/working-changes.zip",
+  "protected_sensor_sources_unchanged": {
+    "sensor_pico/encoder.c": "0a40fe376aa29132efd9a5c3995c49ec74a04ca1216438db1953bc34b0b69737",
+    "sensor_pico/encoder.h": "8e8d1e8d6c509d64c89a084bf384464dbf6625de3481a1db6983987011fb1af7",
+    "sensor_pico/aht10.c": "32f5debfad432c263c55b0f3bf838bd6ce9c818a3c1fa34f1db9c119b13342bb",
+    "sensor_pico/aht10.h": "0f4c17580655a607d3d6910fc3c63272c2ebe76d14402500dcd1c94269314bff",
+    "sensor_pico/tools/decode.py": "f3d9aa0b9d2be75515acaacc2c5c2d9fc479be8bd07a7c19bd10c83ebc30f3b7"
+  },
+  "baseline_and_course_source_changes": 0,
+  "sensor_builds": {
+    "sensor_pico": {
+      "result": "PASS",
+      "uf2": "sensor_pico/build/sensor_pico.uf2",
+      "uf2_bytes": 78336,
+      "uf2_sha256": "9a1cb293f412b502105bbcd53d1b3564c44b838188682892e330ce26db58e0ce",
+      "size": "text\t   data\t    bss\t    dec\t    hex\tfilename\n  43048\t      0\t   4304\t  47352\t   b8f8\t/mnt/c/Embedded_Proj/INF2004_SE16/sensor_pico/build/sensor_pico.elf"
+    },
+    "sensor_pico_uart": {
+      "result": "PASS",
+      "uf2": "sensor_pico/build/sensor_pico_uart.uf2",
+      "uf2_bytes": 92672,
+      "uf2_sha256": "08084e4de9d9d86f595f7f187e5ce7480b6b0a42f6ab49337cfd67167cf89b95",
+      "size": "text\t   data\t    bss\t    dec\t    hex\tfilename\n  50200\t      0\t   8900\t  59100\t   e6dc\t/mnt/c/Embedded_Proj/INF2004_SE16/sensor_pico/build/sensor_pico_uart.elf"
+    }
+  },
+  "wifi_two_board_build": {
+    "kind": "build/static checks only",
+    "fault": 0,
+    "sensor_emulator": false,
+    "course_commit": "2e8e6ad480c2d84a369b12995694b9bf5e9ddfb3",
+    "actual_compile_commands": 89,
+    "uart_baseline_files": 86,
+    "baseline_changes": 0,
+    "shared_source_sha256": {
+      "src/pico1/pico1_protocol.c": "31db49c2124f7df66908117fa43c49e1f4e1f29f9ac19ed9f0df57d914dee86d",
+      "src/pico1/pico1_protocol.h": "b7fcbd1dc442b6e21c43df0900688fe6d45127e610039a7dc041ad2abda64480",
+      "src/pico2/pico2_protocol.c": "f16b204778f4540f37c15dd6ee293411d25e4e8909e308535c03aedfb7b837ad",
+      "src/pico2/pico2_protocol.h": "568814ebd3220bd7837297a0a1e14ad55d6424442e90d6b604c00afff1726f1f",
+      "src/protocol/crc16.c": "786c93e54fc7b2363b2e556fae35f9ddcaf88c07669aabfacd5780ab82b53d48",
+      "src/protocol/crc16.h": "95b5e09fa177e2a15f5b31cdc82888cd05d28409700a7e2984da082ded320de6",
+      "src/protocol/frame.c": "3a00ae80f9eceb9c9c604d5a1bda610967657e768ac49c79578df293f4968013",
+      "src/protocol/frame.h": "4e910fe1bb83d1d0afe015d6d2ec2e295a758c791131baefa38c2eda60af05ef",
+      "src/protocol/link.h": "95f5285330dc878ffafd54c7e8afd6f70a5b76e4b8868ed86971094624b12dcd",
+      "src/protocol/protocol.h": "8c242b8c364eeb2d492338b51dfbdd5af1dac23d1bc3b5b778d6057be5214f46",
+      "src/protocol/reliability.c": "dc72f57d12ec54fe114eadff63ba37e9896d4da4fa8023bcc76fbb36c77e2d33",
+      "src/protocol/reliability.h": "e4438d65b95fe5a079ba5f43dc73477ad2af49a2b2ecb8f4fb03c1a15eb80bc7",
+      "src/protocol/storage_profile.h": "0f9dff9e68a11bfea1507a19b589bef85e71184f59bc0a0496731378493581ee",
+      "src/protocol/stream_parser.c": "bdc480c9ecd5eb5c6360a55e8f8fc52cd44b7d282eb8385b59e77eeec46b89e6",
+      "src/protocol/stream_parser.h": "0cf2e1b303c34b3cc5d319b58abf997d48f8f8dbb7821a727d1bc4677ebfb5b6"
+    },
+    "wire_codec_unchanged": true,
+    "shared_protocol_sources": [
+      "pico2/pico2_protocol.c",
+      "protocol/crc16.c",
+      "protocol/frame.c",
+      "protocol/reliability.c",
+      "protocol/stream_parser.c"
+    ],
+    "isr_notification": "tk_set_flg within TA_HLNG",
+    "isr_frame_processing": "absent",
+    "effective_macros": {
+      "CNF_SMP": "1",
+      "TK_MAX_CORE": "2",
+      "TM_CONSOLE_USB_CDC": "1",
+      "TM_CONSOLE_UART": "0",
+      "USE_SDEV_DRV": "(0)",
+      "UART_FAULT": "0",
+      "APP_SENSOR_EMULATOR": "0"
+    },
+    "uf2_bytes": 134656,
+    "uf2_sha256": "ee62a54a0abdf3504169c1f9690ef7ecdb9d3e2e0e37575ac3204cefad68522b",
+    "elf_sha256": "f57481f2a6c3a6c496ead1101003db7fb56e0e99409944551408d0f1facf2208",
+    "size": "text\t   data\t    bss\t    dec\t    hex\tfilename\n  67186\t     44\t  42764\t 109994\t  1adaa\t/mnt/c/Embedded_Proj/INF2004_SE16/wifi_pico/course/build_make/wifi_pico_uart_two_board.elf",
+    "physical_uart_status": "NOT TESTED"
+  },
+  "wifi_loopback_build": {
+    "kind": "build/static checks only",
+    "fault": 0,
+    "sensor_emulator": true,
+    "course_commit": "2e8e6ad480c2d84a369b12995694b9bf5e9ddfb3",
+    "actual_compile_commands": 92,
+    "uart_baseline_files": 86,
+    "baseline_changes": 0,
+    "shared_source_sha256": {
+      "src/pico1/pico1_protocol.c": "31db49c2124f7df66908117fa43c49e1f4e1f29f9ac19ed9f0df57d914dee86d",
+      "src/pico1/pico1_protocol.h": "b7fcbd1dc442b6e21c43df0900688fe6d45127e610039a7dc041ad2abda64480",
+      "src/pico2/pico2_protocol.c": "f16b204778f4540f37c15dd6ee293411d25e4e8909e308535c03aedfb7b837ad",
+      "src/pico2/pico2_protocol.h": "568814ebd3220bd7837297a0a1e14ad55d6424442e90d6b604c00afff1726f1f",
+      "src/protocol/crc16.c": "786c93e54fc7b2363b2e556fae35f9ddcaf88c07669aabfacd5780ab82b53d48",
+      "src/protocol/crc16.h": "95b5e09fa177e2a15f5b31cdc82888cd05d28409700a7e2984da082ded320de6",
+      "src/protocol/frame.c": "3a00ae80f9eceb9c9c604d5a1bda610967657e768ac49c79578df293f4968013",
+      "src/protocol/frame.h": "4e910fe1bb83d1d0afe015d6d2ec2e295a758c791131baefa38c2eda60af05ef",
+      "src/protocol/link.h": "95f5285330dc878ffafd54c7e8afd6f70a5b76e4b8868ed86971094624b12dcd",
+      "src/protocol/protocol.h": "8c242b8c364eeb2d492338b51dfbdd5af1dac23d1bc3b5b778d6057be5214f46",
+      "src/protocol/reliability.c": "dc72f57d12ec54fe114eadff63ba37e9896d4da4fa8023bcc76fbb36c77e2d33",
+      "src/protocol/reliability.h": "e4438d65b95fe5a079ba5f43dc73477ad2af49a2b2ecb8f4fb03c1a15eb80bc7",
+      "src/protocol/storage_profile.h": "0f9dff9e68a11bfea1507a19b589bef85e71184f59bc0a0496731378493581ee",
+      "src/protocol/stream_parser.c": "bdc480c9ecd5eb5c6360a55e8f8fc52cd44b7d282eb8385b59e77eeec46b89e6",
+      "src/protocol/stream_parser.h": "0cf2e1b303c34b3cc5d319b58abf997d48f8f8dbb7821a727d1bc4677ebfb5b6"
+    },
+    "wire_codec_unchanged": true,
+    "shared_protocol_sources": [
+      "pico1/pico1_protocol.c",
+      "pico2/pico2_protocol.c",
+      "protocol/crc16.c",
+      "protocol/frame.c",
+      "protocol/reliability.c",
+      "protocol/stream_parser.c"
+    ],
+    "isr_notification": "tk_set_flg within TA_HLNG",
+    "isr_frame_processing": "absent",
+    "effective_macros": {
+      "CNF_SMP": "1",
+      "TK_MAX_CORE": "2",
+      "TM_CONSOLE_USB_CDC": "1",
+      "TM_CONSOLE_UART": "0",
+      "USE_SDEV_DRV": "(0)",
+      "UART_FAULT": "0",
+      "APP_SENSOR_EMULATOR": "1"
+    },
+    "uf2_bytes": 138752,
+    "uf2_sha256": "9b16294f74baff1a0d77f234e6dc4f8aab7a91232887f8c4952d22e0a63b44d6",
+    "elf_sha256": "d8b3abcc12526441e5810fa5f2c2d365174cdbf206ae648338253f68e1c0eda0",
+    "size": "text\t   data\t    bss\t    dec\t    hex\tfilename\n  69237\t     44\t  52396\t 121677\t  1db4d\t/mnt/c/Embedded_Proj/INF2004_SE16/wifi_pico/course/build_make/wifi_pico_uart_loopback_f0.elf",
+    "physical_uart_status": "NOT TESTED"
+  },
+  "shared_host": {
+    "kind": "host tests with simulated flash/wire",
+    "result": "PASS",
+    "physical": "NOT TESTED",
+    "baseline_protocol_assertions": "PASS",
+    "shared_reliability_groups_passed": 8,
+    "checks": [
+      "actual encoder/page snapshot/no live mutation/capacity rejection",
+      "actual flash code verified erase completion and execution/readback failures",
+      "shared endpoints source release/failure/duplicate END",
+      "CONFIG minute validation and default CLEAR deadline failure reproduced",
+      "long CLEAR completion ACK, lost delayed ACK with one erase, no ACK on failure",
+      "JZ decoder validates actual encoder CHECKs and page boundaries"
+    ]
+  },
+  "wifi_loopback_host": [
+    {
+      "case": "normal",
+      "fault": 0,
+      "result": "PASS",
+      "kind": "host model"
+    },
+    {
+      "case": "overflow_recovery",
+      "fault": 0,
+      "result": "PASS",
+      "kind": "host model"
+    },
+    {
+      "case": "corrupt_frame",
+      "fault": 0,
+      "result": "PASS",
+      "kind": "host model"
+    },
+    {
+      "case": "bounded_queue",
+      "fault": 0,
+      "result": "PASS",
+      "kind": "host model"
+    },
+    {
+      "case": "command_timeout",
+      "fault": 1,
+      "result": "PASS",
+      "kind": "host model"
+    },
+    {
+      "case": "receive_timeout",
+      "fault": 2,
+      "result": "PASS",
+      "kind": "host model"
+    },
+    {
+      "case": "lost_end_ack",
+      "fault": 3,
+      "result": "PASS",
+      "kind": "host model"
+    }
+  ],
+  "wifi_external_host": [
+    {
+      "case": "external_binary",
+      "result": "PASS",
+      "binary_bytes_compared": 300,
+      "kind": "host model"
+    },
+    {
+      "case": "external_capture_busy",
+      "result": "PASS",
+      "binary_bytes_compared": 300,
+      "kind": "host model"
+    },
+    {
+      "case": "external_lost_end_ack",
+      "result": "PASS",
+      "binary_bytes_compared": 300,
+      "kind": "host model"
+    },
+    {
+      "case": "external_capacity_recovery",
+      "result": "PASS",
+      "binary_bytes_compared": 300,
+      "kind": "host model"
+    },
+    {
+      "case": "external_empty",
+      "result": "PASS",
+      "binary_bytes_compared": 0,
+      "kind": "host model"
+    },
+    {
+      "case": "external_maximum",
+      "result": "PASS",
+      "binary_bytes_compared": 1024,
+      "kind": "host model"
+    }
+  ],
+  "baseline_modes": [
+    {
+      "mode": 0,
+      "name": "happy_path",
+      "build": "PASS",
+      "local_emulator": "PASS",
+      "wokwi": "NOT RUN",
+      "binary_sha256": "4ac4f4e6966d3c27f8d602000816c18348c510ee743fed275c7351b7f7601b06",
+      "bin_bytes": 21568,
+      "size": "   text\t   data\t    bss\t    dec\t    hex\tfilename\n  25664\t      0\t   1200\t  26864\t   68f0\tC:\\Embedded_Proj\\INF2004_SE16\\uart_protocol\\build\\regression\\mode-0\\uart_protocol.elf\n",
+      "baseline_uart_bytes": "IDENTICAL (both UARTs)"
+    },
+    {
+      "mode": 1,
+      "name": "corrupt_first_data",
+      "build": "PASS",
+      "local_emulator": "PASS",
+      "wokwi": "NOT RUN",
+      "binary_sha256": "fab332e176538263ec7e33fd477d59bbef910d2507b95e414787880a34731bdc",
+      "bin_bytes": 21744,
+      "size": "   text\t   data\t    bss\t    dec\t    hex\tfilename\n  25840\t      0\t   1200\t  27040\t   69a0\tC:\\Embedded_Proj\\INF2004_SE16\\uart_protocol\\build\\regression\\mode-1\\uart_protocol.elf\n",
+      "baseline_uart_bytes": "IDENTICAL (both UARTs)"
+    },
+    {
+      "mode": 2,
+      "name": "drop_first_data_ack",
+      "build": "PASS",
+      "local_emulator": "PASS",
+      "wokwi": "NOT RUN",
+      "binary_sha256": "92bf6b94cae17ddf0af9973b5810187b3ff955a45000015de675972dd7a77d44",
+      "bin_bytes": 21664,
+      "size": "   text\t   data\t    bss\t    dec\t    hex\tfilename\n  25760\t      0\t   1200\t  26960\t   6950\tC:\\Embedded_Proj\\INF2004_SE16\\uart_protocol\\build\\regression\\mode-2\\uart_protocol.elf\n",
+      "baseline_uart_bytes": "IDENTICAL (both UARTs)"
+    },
+    {
+      "mode": 3,
+      "name": "wrong_first_block",
+      "build": "PASS",
+      "local_emulator": "PASS",
+      "wokwi": "NOT RUN",
+      "binary_sha256": "f832ef0d0f3c14943873acae4e1003b54b92c165927af8a9706f71eaff050f14",
+      "bin_bytes": 21808,
+      "size": "   text\t   data\t    bss\t    dec\t    hex\tfilename\n  25904\t      0\t   1200\t  27104\t   69e0\tC:\\Embedded_Proj\\INF2004_SE16\\uart_protocol\\build\\regression\\mode-3\\uart_protocol.elf\n",
+      "baseline_uart_bytes": "IDENTICAL (both UARTs)"
+    },
+    {
+      "mode": 4,
+      "name": "drop_config_ack",
+      "build": "PASS",
+      "local_emulator": "PASS",
+      "wokwi": "NOT RUN",
+      "binary_sha256": "c03e68ceaf85fe7656e4a5bdd3c7494ed267c3942270905c14ca3ea1e08b2038",
+      "bin_bytes": 21656,
+      "size": "   text\t   data\t    bss\t    dec\t    hex\tfilename\n  25752\t      0\t   1200\t  26952\t   6948\tC:\\Embedded_Proj\\INF2004_SE16\\uart_protocol\\build\\regression\\mode-4\\uart_protocol.elf\n",
+      "baseline_uart_bytes": "IDENTICAL (both UARTs)"
+    }
+  ],
+  "explicit_policy_changes": {
+    "real_clear_ack_timeout_ms": 120000,
+    "default_ack_timeout_ms": 500,
+    "max_retries": 3,
+    "receive_progress_timeout_ms": 2500,
+    "total_snapshot_bytes": 1024,
+    "snapshot_page_bytes": 256,
+    "CONFIG_interval": "whole-minute values, wire seconds divided by 60; reject inexact/out-of-range",
+    "Sensor_UART_target": "CONFIG enables periodic sampling; CLEAR pauses until CONFIG; original manual target retained"
+  },
+  "physical_uart_flash_aht10": "NOT TESTED",
+  "http": "NOT IMPLEMENTED / NOT TESTED",
+  "rtc_dormant_preamble": "NOT IMPLEMENTED",
+  "wokwi": "NOT RUN",
+  "remaining_limit": "Full 1 MiB transfer is not implemented; oversized logs rejected without truncation."
+}

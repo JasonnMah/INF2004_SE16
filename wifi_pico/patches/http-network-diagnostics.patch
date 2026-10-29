@@ -1,0 +1,21 @@
+--- a/lib/libwifi/sysdepend/pico_rp2040/cyw43_utk.c
++++ b/lib/libwifi/sysdepend/pico_rp2040/cyw43_utk.c
+@@ -74,6 +74,7 @@
+ #if TM_APP_HTTP
+ /* App extension stays inside the sole raw-lwIP execution context. */
+ extern void cyw43_utk_app_poll(struct netif *netif);
++extern void cyw43_utk_app_scan(const cyw43_ev_scan_result_t *result);
+ #endif
+ static volatile uint32_t status_version;
+ static volatile uint32_t status_read_retries;
+@@ -447,6 +448,10 @@
+ 
+     if(result == NULL) return 0;
+     status->scan_count++;
++#if TM_APP_HTTP
++    /* Copy test diagnostics in the existing radio task, never in an ISR. */
++    cyw43_utk_app_scan(result);
++#endif
+     if(result->rssi > status->strongest_rssi) {
+         status->strongest_rssi = result->rssi;
+     }

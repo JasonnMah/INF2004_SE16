@@ -152,8 +152,10 @@ ifeq ($(WIFI_JOIN),1)
 ifneq ($(WIFI),cyw43)
 $(error WIFI_JOIN=1 requires WIFI=cyw43)
 endif
+ifneq ($(INF2004_HTTP),1)
 ifeq ($(wildcard ../config/wifi_credentials.h),)
 $(error WIFI_JOIN=1 needs config/wifi_credentials.h; copy it from config/wifi_credentials.example.h and add local credentials)
+endif
 endif
 endif
 

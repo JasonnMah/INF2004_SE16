@@ -32,15 +32,19 @@ for entry in origin["files"]:
     require(source_sha(WIFI / "course" / entry.get("stored_path", entry["path"]), entry["hash_mode"]) == entry["portable_sha256"],
             "Unrecorded vendored change: " + entry["path"])
 modified = sorted(e["path"] for e in origin["files"] if e["modified"])
-require(modified == ["build_make/makefile", "config/config.h",
-                     "kernel/sysdepend/pico_rp2040/hw_setting.c"],
+# HTTP-only changes remain present in the snapshot but excluded from this image.
+require(modified == ["build_make/makefile", "build_make/pico_rp2040.mk", "config/config.h",
+                     "kernel/sysdepend/pico_rp2040/hw_setting.c",
+                     "lib/libnet/lwip/include/lwipopts.h",
+                     "lib/libwifi/sysdepend/pico_rp2040/cyw43_utk.c",
+                     "lib/libwifi/sysdepend/pico_rp2040/cyw43_utk_kernel.c"],
         "Unexpected course patch set")
 
 baseline = json.loads((WIFI / "tests/uart_baseline_sha256.json").read_text())
 for name, expected in baseline.items():
     require(source_sha(ROOT / name.replace("\\", "/")) == expected, "UART baseline changed: " + name)
 require((BUILD / ".build_profile").read_text().strip() ==
-        "inf2004-milestone1-smp1-usb-only-v1", "Stale build profile")
+        "inf2004-milestone1-smp1-usb-only-v2", "Stale build profile")
 
 raw = (BUILD / "milestone1-build.log").read_bytes()
 log = raw.decode("utf-16" if raw.startswith(b"\xff\xfe") else "utf-8-sig")
@@ -58,12 +62,12 @@ for command in compile_commands:
             "Wrong target/SMP in an actual compilation")
 require(not any("../app_program/app_main.c" in c or "../app_program/demo_tasks.c" in c
                 for c in compile_commands), "Upstream application compiled into profile")
-require(any("../../app_program/smp_boot_main.c" in c for c in compile_commands),
+require(any("../../tests/firmware/smp_boot_main.c" in c for c in compile_commands),
         "Diagnostic application was not compiled")
 
 common = ["arm-none-eabi-gcc", *flags, "-D_PICO_RP2040_",
           "-I../include", "-I../config", "-I../kernel/knlinc"]
-app = "../../app_program/smp_boot_main.c"
+app = "../../tests/firmware/smp_boot_main.c"
 macro_text = run([*common, "-dM", "-E", app]).stdout
 macros = dict(re.findall(r"^#define (\w+) (.*)$", macro_text, re.M))
 expected_macros = {"CNF_SMP":"1", "TK_SUPPORT_SMP":"1", "TK_MAX_CORE":"2",

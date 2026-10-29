@@ -14,7 +14,12 @@ IMPORT void cyw43_utk_task(INT stacd, void *exinf);
 /* USB CDC drains at priority 3 on the same physical core.  Keep radio polling
  * below it so firmware download and the 2 ms poll cadence cannot overflow the
  * console ring, while remaining well above the qualification task. */
+#if APP_COMBINED
+/* UART Communication is priority 4; the radio yields for each 2 ms poll. */
+#define CYW43_TASK_PRIORITY  6
+#else
 #define CYW43_TASK_PRIORITY  4
+#endif
 #define CYW43_TASK_STACK     (6 * 1024)
 
 EXPORT ER cyw43_utk_start(void)
