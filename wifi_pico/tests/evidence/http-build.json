@@ -21,15 +21,12 @@
   },
   "application_source_sha256": {
     "tests/firmware/fault_injection.c": "672cd0b00968b299f610ad8e4457a375fa46b46757cc95799c090ad0420a496f",
-    "tests/firmware/http_post.c": "9b8b8d7f179f99376cdcd9a1007ec65352f8bbc067c72a63a9e81e81e48e365f",
-    "tests/firmware/http_post.h": "c6e287c1072c5cc1168dc833663001d68dae36f9449d00454043510ab6f99d66",
-    "tests/firmware/http_test.c": "e8d071bb2b327ee10e9e9bd1d8e32295a1d474915aa91cb6067f7407a7a0fb7d",
-    "tests/firmware/http_test_main.c": "8d27277c13afd9e4fa2c7f240bb9f6961dfcb633cda65f7842c330ed15d6cef2",
-    "tests/firmware/network_retry.h": "a730a823f298b2fd310a295bbb672e3cf2ca85386023bd3ec2b60114b0edadb9",
+    "tests/firmware/http_test_main.c": "088b2f8130640e1cd25d09ddbf848befba403619881859403546f4b66437fe57",
     "tests/firmware/sensor_emulator.c": "15af33b02c58c97cb9c38a4a9484dd098f3af17edeb07e928aff88e1ff292c5c",
-    "tests/firmware/smp_boot_main.c": "db52cd662956a3a7b8891ec211b3e40e3824a1abe07dc6c3dbbbc8a77ab54974"
+    "tests/firmware/smp_boot_main.c": "db52cd662956a3a7b8891ec211b3e40e3824a1abe07dc6c3dbbbc8a77ab54974",
+    "tests/firmware/uart_main.c": "e16231a326f8aa9d733ee76e1b1f94ef49a2ed0d247e55b80fcac5624d97256e"
   },
-  "uf2_bytes": 668160,
-  "uf2_sha256": "4030ec18080de53de3d05fc3770b7cde26b55f7f0f69fb252e648a8022458099",
-  "size": "text\t   data\t    bss\t    dec\t    hex\tfilename\n 331544\t   2472\t  67128\t 401144\t  61ef8\twifi_pico_http_known_bytes.elf"
+  "uf2_bytes": 672256,
+  "uf2_sha256": "734e83cad84d268b5b013734548861b3277c84419d546251c2ec37117ae82cc7",
+  "size": "text\t   data\t    bss\t    dec\t    hex\tfilename\n 333568\t   2472\t  67180\t 403220\t  62714\twifi_pico_http_known_bytes.elf"
 }

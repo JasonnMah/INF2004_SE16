@@ -12,6 +12,8 @@ static struct tcp_pcb *connection;
 static ip_addr_t server;
 static unsigned server_port, attempt, status_code, offset, header_length, response_length;
 static unsigned connected, receipt, retryable;
+static unsigned config_request, config_minutes;
+static uint32_t config_timestamp;
 static uint32_t started;
 static int result, failed;
 static const char *reason = "idle";
@@ -47,6 +49,11 @@ static unsigned build_header(const char *address, unsigned port)
 {
     header_length = 0;
     header[0] = 0;
+    if (config_request) {
+        return header_text("GET /config HTTP/1.1\r\nHost: ") && header_text(address) &&
+            header_text(":") && header_number(port) &&
+            header_text("\r\nCache-Control: no-cache\r\nConnection: close\r\n\r\n");
+    }
     return header_text("POST /logs HTTP/1.1\r\nHost: ") && header_text(address) &&
         header_text(":") && header_number(port) &&
         header_text("\r\nContent-Type: application/octet-stream\r\nContent-Length: ") &&
@@ -71,6 +78,17 @@ static unsigned equal_name(const char *a, const char *b)
     }
     return *a == *b;
 }
+static unsigned decimal_u32(const char *text, uint32_t *value)
+{
+    if (!*text) return 0;
+    uint32_t n = 0;
+    for (; *text; ++text) {
+        if (*text < '0' || *text > '9' || n > (UINT32_MAX - (unsigned)(*text - '0')) / 10u) return 0;
+        n = n * 10u + (unsigned)(*text - '0');
+    }
+    *value = n;
+    return 1;
+}
 static void parse_receipt(void)
 {
     unsigned seen = 0;
@@ -83,7 +101,7 @@ static void parse_receipt(void)
         fail("malformed status", 0); return;
     }
     status_code = (line[9]-'0')*100u + (line[10]-'0')*10u + line[11]-'0';
-    if (status_code != 200 && status_code != 201) {
+    if (status_code != 200 && (config_request || status_code != 201)) {
         fail("HTTP failure", status_code >= 500 || status_code == 408 || status_code == 429);
         return;
     }
@@ -100,6 +118,24 @@ static void parse_receipt(void)
         unsigned bit = 0;
         if (equal_name(line, "Content-Length")) {
             bit = 1; if (strcmp(colon, "0")) { fail("unexpected response body", 0); return; }
+        } else if (config_request) {
+            uint32_t value;
+            if (equal_name(line, "X-Config-Version")) {
+                bit = 2;
+                if (strcmp(colon, "1")) { fail("unsupported CONFIG version", 0); return; }
+            } else if (equal_name(line, "X-Config-Minutes")) {
+                bit = 4;
+                if (!decimal_u32(colon, &value) || value < 1 || value > 4095) {
+                    fail("invalid PC interval", 0); return;
+                }
+                config_minutes = value;
+            } else if (equal_name(line, "X-Config-Unix-Seconds")) {
+                bit = 8;
+                if (!decimal_u32(colon, &value) || !value) { fail("invalid PC timestamp", 0); return; }
+                config_timestamp = value;
+            } else if (equal_name(line, "Transfer-Encoding")) {
+                fail("unsupported response framing", 0); return;
+            }
         } else if (equal_name(line, "X-Log-ID")) {
             bit = 2; if (strcmp(colon, log_id)) { fail("receipt ID mismatch", 0); return; }
         } else if (equal_name(line, "X-Log-Length")) {
@@ -113,7 +149,7 @@ static void parse_receipt(void)
         seen |= bit;
         line = end + 2;
     }
-    if (seen != 15) { fail("missing receiver receipt", 0); return; }
+    if (seen != 15) { fail(config_request ? "missing PC configuration" : "missing receiver receipt", 0); return; }
     receipt = 1;
 }
 static err_t receive(void *arg, struct tcp_pcb *pcb, struct pbuf *p, err_t error)
@@ -179,6 +215,7 @@ void http_post_start_data(uint32_t now, const char *address, unsigned port,
 {
     if (http_post_busy()) return;
     result = failed = receipt = attempt = status_code = 0;
+    config_request = 0;
     reason = "in progress";
     if (!port || port > 65535 || !ipaddr_aton(address, &server)) {
         result = -1; reason = "invalid PC address/port"; return;
@@ -204,6 +241,25 @@ void http_post_start_data(uint32_t now, const char *address, unsigned port,
     }
     begin_attempt(now);
 }
+void http_config_start(uint32_t now, const char *address, unsigned port)
+{
+    if (http_post_busy()) return;
+    result = failed = receipt = attempt = status_code = 0;
+    config_request = 1;
+    config_minutes = config_timestamp = 0;
+    reason = "fetching PC configuration";
+    if (!port || port > 65535 || !ipaddr_aton(address, &server)) {
+        result = -1; reason = "invalid PC address/port"; return;
+    }
+    server_port = port;
+    body = NULL; body_length = 0;
+    if (!build_header(address, port)) {
+        result = -1; reason = "request header too large"; return;
+    }
+    begin_attempt(now);
+}
+unsigned http_config_minutes(void) { return config_minutes; }
+uint32_t http_config_timestamp(void) { return config_timestamp; }
 void http_post_start(uint32_t now, const char *address, unsigned port)
 {
     if (http_post_busy()) return;
@@ -231,7 +287,7 @@ void http_post_poll(uint32_t now, unsigned network_ready)
         return;
     }
     if (phase == FINISH) {
-        release_connection(); phase = IDLE; result = 1; reason = "receiver confirmed storage"; return;
+        release_connection(); phase = IDLE; result = 1; reason = config_request ? "PC configuration received" : "receiver confirmed storage"; return;
     }
     if (phase == CONNECTING && connected) { phase = SENDING; started = now; }
     if (phase == CONNECTING && now - started >= HTTP_CONNECT_MS) fail("connect timeout", 1);

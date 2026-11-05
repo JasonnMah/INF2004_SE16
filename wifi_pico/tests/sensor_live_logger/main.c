@@ -144,7 +144,7 @@ static void print_status(void)
         printf("[SENSOR] latest=%s%d.%02d C (raw, before 0.25 C quantization)\n",
                last_temperature < 0 ? "-" : "", magnitude / 100, magnitude % 100);
     }
-    puts("[MODE] JZ encoder pages=256 bytes; flash=OFF RTC=OFF; CONFIG timestamp is simulated");
+    puts("[MODE] JZ encoder pages=256 bytes; format=interval12 (1..4095 minutes); flash=OFF RTC=OFF; CONFIG timestamp is simulated");
     puts("[READY] Wi-Fi GP20 starts sampling; interval comes from CONFIG (existing Wi-Fi: 3600 seconds)");
     puts("[USB] s + Enter: status; d + Enter: last UART snapshot hex; DTR off/on: status");
 }

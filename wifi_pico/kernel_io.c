@@ -6,12 +6,24 @@
 #include <tk/tkernel.h>
 #include <tm/tmonitor.h>
 #include <sys/sysdef.h>
+#include <bsp/libbsp.h>
 #include "app.h"
 #include "rx_ring.h"
 #if APP_COMBINED
 #include "upload.h"
+#include "pc_config.h"
 static ID upload_queue, upload_results;
 static UW upload_storage[16], result_storage[8];
+/* The course permits four message buffers total. UI and status use two;
+ * settings and uploads share the existing radio request/result buffers. */
+enum { RADIO_UPLOAD = 1, RADIO_CONFIG = 2 };
+typedef struct { unsigned kind; upload_job_t upload; unsigned token; } radio_request_t;
+typedef struct { unsigned kind; int upload; pc_config_result_t config; } radio_result_t;
+static radio_request_t next_request; /* Radio task alone reads/writes this cache. */
+static radio_result_t next_result;   /* Communication task alone owns this cache. */
+static unsigned request_cached, result_cached;
+_Static_assert(sizeof(upload_storage) >= sizeof(radio_request_t) + sizeof(INT), "Radio request storage");
+_Static_assert(sizeof(result_storage) >= sizeof(radio_result_t) + sizeof(INT), "Radio result storage");
 #endif
 
 static ID rx_flags[2], command_queue, status_queue;
@@ -84,12 +96,13 @@ int rt_setup(void)
     status_queue = tk_cre_mbf(&queue);
     if (status_queue <= E_OK) return status_queue;
 #if APP_COMBINED
-    queue.bufptr=upload_storage;queue.bufsz=sizeof(upload_storage);queue.maxmsz=sizeof(upload_job_t);
+    queue.bufptr=upload_storage;queue.bufsz=sizeof(upload_storage);queue.maxmsz=sizeof(radio_request_t);
     upload_queue=tk_cre_mbf(&queue);
     if(upload_queue<=E_OK) return upload_queue;
-    queue.bufptr=result_storage;queue.bufsz=sizeof(result_storage);queue.maxmsz=sizeof(int);
+    queue.bufptr=result_storage;queue.bufsz=sizeof(result_storage);queue.maxmsz=sizeof(radio_result_t);
     upload_results=tk_cre_mbf(&queue);
     if(upload_results<=E_OK) return upload_results;
+    request_cached=result_cached=0;
 #endif
     return E_OK;
 }
@@ -277,33 +290,117 @@ void rt_led_init(void)
 }
 void rt_led_set(unsigned on) { out_w(on ? GPIO_OUT_SET : GPIO_OUT_CLR, 1u << 6); }
 
+/* Maker Pi Pico GP18 is PWM slice 1, channel A. Status Task alone owns it.
+ * This profile has no physical-timer clients; SysTick drives the kernel tick.
+ * Keep a future physical-timer profile from silently sharing the same slice. */
+#if USE_PTMR
+#error "Reserve PWM slice 1 before enabling physical timers with the error buzzer."
+#endif
+#define BUZZER_PIN 18u
+#define BUZZER_HZ 2000u
+#define BUZZER_PERIOD (CLK_PLL_SYS_FREQ / BUZZER_HZ)
+_Static_assert(BUZZER_PERIOD > 1u && BUZZER_PERIOD <= 65536u, "Buzzer PWM period");
+void rt_buzzer_init(void)
+{
+    /* The course leaves PWM in reset when USE_PTMR=0. Release it without
+     * resetting other slices, then configure only slice 1; no PWM IRQ needed. */
+    /* Atomic clear avoids racing UART/radio reset release on the other core. */
+    out_w(RESETS_RESET + 0x3000u, RESETS_RESET_PWM);
+    unsigned wait = 1000u;
+    while (!(in_w(RESETS_RESET_DONE) & RESETS_RESET_PWM) && --wait) { }
+    if (!wait) rt_fatal("buzzer PWM reset", E_SYS);
+    out_w(PWM_CH1_BASE + PWM_CHx_CSR, 0);
+    out_w(PWM_CH1_BASE + PWM_CHx_DIV, 1u << 4); /* Divider 1.0, 8:4 fixed point. */
+    out_w(PWM_CH1_BASE + PWM_CHx_CTR, 0);
+    pwm_set_wrap(BUZZER_PIN, BUZZER_PERIOD - 1u);
+    pwm_set_cc(BUZZER_PIN, 0); /* Silent before routing PWM to the piezo. */
+    out_w(GPIO(BUZZER_PIN), GPIO_DRIVE_4MA | GPIO_SHEMITT);
+    pwm_set_pin(BUZZER_PIN);
+    pwm_set_enabled(BUZZER_PIN, 1);
+}
+void rt_buzzer_set(unsigned on)
+{
+    /* Hardware generates the 2 kHz tone; the task only times its envelope.
+     * Zero duty returns the output LOW, rather than stopping it mid-tone. */
+    pwm_set_cc(BUZZER_PIN, on ? BUZZER_PERIOD / 2u : 0u);
+}
+
 #if APP_COMBINED
+static int radio_request_send(const radio_request_t *request)
+{
+    ER error=tk_snd_mbf(upload_queue,request,sizeof(*request),TMO_POL);
+    if(error==E_TMOUT) return 0;
+    if(error<E_OK) rt_fatal("radio request",error);
+    return 1;
+}
+static int radio_request_pending(void)
+{
+    if(request_cached) return 1;
+    INT size=tk_rcv_mbf(upload_queue,&next_request,TMO_POL);
+    if(size==E_TMOUT) return 0;
+    if(size!=(INT)sizeof(next_request)) rt_fatal("radio request receive",size);
+    request_cached=1;
+    return 1;
+}
+int rt_config_request_send(unsigned token)
+{
+    const radio_request_t request={.kind=RADIO_CONFIG,.token=token};
+    return radio_request_send(&request);
+}
+int rt_config_request_take(unsigned *token)
+{
+    if(!radio_request_pending() || next_request.kind!=RADIO_CONFIG) return 0;
+    *token=next_request.token;request_cached=0;
+    return 1;
+}
 int rt_upload_send(const upload_job_t *job)
 {
-    ER e=tk_snd_mbf(upload_queue,job,sizeof(*job),TMO_POL);
-    if(e==E_TMOUT) return 0;
-    if(e<E_OK) rt_fatal("upload queue",e);
-    return 1;
+    const radio_request_t request={.kind=RADIO_UPLOAD,.upload=*job};
+    return radio_request_send(&request);
 }
 int rt_upload_take(upload_job_t *job)
 {
-    INT n=tk_rcv_mbf(upload_queue,job,TMO_POL);
-    if(n==E_TMOUT) return 0;
-    if(n!=(INT)sizeof(*job)) rt_fatal("upload receive",n);
+    if(!radio_request_pending() || next_request.kind!=RADIO_UPLOAD) return 0;
+    *job=next_request.upload;request_cached=0;
+    return 1;
+}
+static void radio_result_send(const radio_result_t *result)
+{
+    /* One outstanding application operation: a full result queue is a bug. */
+    ER error=tk_snd_mbf(upload_results,result,sizeof(*result),TMO_POL);
+    if(error<E_OK) rt_fatal("radio result",error);
+    error=tk_set_flg(rx_flags[0],COMMAND_NOTIFY);
+    if(error<E_OK) rt_fatal("radio result notification",error);
+}
+static int radio_result_pending(void)
+{
+    if(result_cached) return 1;
+    INT size=tk_rcv_mbf(upload_results,&next_result,TMO_POL);
+    if(size==E_TMOUT) return 0;
+    if(size!=(INT)sizeof(next_result)) rt_fatal("radio result receive",size);
+    result_cached=1;
+    return 1;
+}
+void rt_config_result_send(const pc_config_result_t *result)
+{
+    const radio_result_t response={.kind=RADIO_CONFIG,.config=*result};
+    radio_result_send(&response);
+}
+int rt_config_result_take(pc_config_result_t *result)
+{
+    if(!radio_result_pending() || next_result.kind!=RADIO_CONFIG) return 0;
+    *result=next_result.config;result_cached=0;
     return 1;
 }
 void rt_upload_result_send(int result)
 {
-    /* One outstanding upload: a full result queue is an ownership bug. */
-    ER e=tk_snd_mbf(upload_results,&result,sizeof(result),TMO_POL);
-    if(e<E_OK) rt_fatal("upload result",e);
+    const radio_result_t response={.kind=RADIO_UPLOAD,.upload=result};
+    radio_result_send(&response);
 }
 int rt_upload_result_take(void)
 {
-    int result;
-    INT n=tk_rcv_mbf(upload_results,&result,TMO_POL);
-    if(n==E_TMOUT) return 0;
-    if(n!=(INT)sizeof(result)) rt_fatal("upload result receive",n);
+    if(!radio_result_pending() || next_result.kind!=RADIO_UPLOAD) return 0;
+    int result=next_result.upload;result_cached=0;
     return result;
 }
 #endif

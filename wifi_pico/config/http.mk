@@ -18,7 +18,7 @@ CFLAGS += -DTM_APP_HTTP=1 -DHTTP_BUILD_CHECK=$(HTTP_BUILD_CHECK) -DTM_CONSOLE_UA
  -I. -I../.. -I../../tests/firmware -I../../../shared/uart_protocol/src
 OBJS := $(filter-out ./mtkernel_3/app_program/%,$(OBJS))
 C_DEPS := $(filter-out ./mtkernel_3/app_program/%,$(C_DEPS))
-HTTP_SRCS := tests/firmware/http_test_main.c tests/firmware/http_post.c tests/firmware/http_test.c \
+HTTP_SRCS := tests/firmware/http_test_main.c http_post.c http_service.c \
  kernel_io.c rx_ring.c buttons.c status.c
 HTTP_OBJS := $(addprefix ./mtkernel_3/http_app/,$(HTTP_SRCS:.c=.o))
 OBJS += $(HTTP_OBJS)

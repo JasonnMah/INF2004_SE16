@@ -1,19 +1,24 @@
 #!/usr/bin/env python3
 """Decode a serial capture of the Sensor Pico's flash dump (GP22).
 
-Usage:  decode.py capture.txt [--csv]
+Usage:  decode.py capture.txt [--csv] [--log-format interval12|legacy16]
+
+interval12 is the current 3-nibble interval; legacy16 reads old 4-nibble logs.
+The raw pages have no version tag: select the format used by their encoder.
 
 Reads the lines between "FLASHDUMP BEGIN" and "FLASHDUMP END" (format "@<page>:<offset> <hex bytes>")
 and decodes the nibble stream described in encoder.h. Every CHECK is verified; the samples in a chunk
 whose CRC does not match are reported as BAD, and samples after the last CHECK on a page as UNVERIFIED.
 Each encountered CHECK also reports its stored CRC chunk.
 """
+import argparse
 import re
 import sys
 from datetime import datetime, timezone
 
 PAGE_BYTES = 256
 PAGE_NIBBLES = PAGE_BYTES * 2
+LOG_FORMATS = {'interval12': 3, 'legacy16': 4}
 
 
 def parse_dump(text):
@@ -51,7 +56,9 @@ def to_nibbles(page):
     return out
 
 
-def decode(pages):
+def decode(pages, *, interval_nibbles=3):
+    if interval_nibbles not in LOG_FORMATS.values():
+        raise ValueError("interval width must be 3 or 4 nibbles")
     samples = []          # dicts: seg, slot, unix, q, temp, status, page
     notes = []
     seg = 0
@@ -113,12 +120,12 @@ def decode(pages):
                 ty = nibs[i]
                 i += 1
                 if ty == 1:
-                    if not need(12):
+                    if not need(8 + interval_nibbles):
                         notes.append(f"page {pg}: truncated TIMEBASE")
                         break
                     t0 = int("".join("%X" % x for x in nibs[i:i + 8]), 16)
-                    interval = int("".join("%X" % x for x in nibs[i + 8:i + 12]), 16)
-                    i += 12
+                    interval = int("".join("%X" % x for x in nibs[i + 8:i + 8 + interval_nibbles]), 16)
+                    i += 8 + interval_nibbles
                     slot = 0
                 elif ty == 2:
                     chunk.append(emit(pg, None, "SENSOR_ERR"))
@@ -157,16 +164,18 @@ def decode(pages):
 
 
 def main():
-    if len(sys.argv) < 2:
-        print(__doc__)
-        return 2
-    text = open(sys.argv[1], errors="replace").read()
-    csv = "--csv" in sys.argv[2:]
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("capture")
+    parser.add_argument("--csv", action="store_true")
+    parser.add_argument("--log-format", choices=LOG_FORMATS, default="interval12")
+    args = parser.parse_args()
+    text = open(args.capture, errors="replace").read()
+    csv = args.csv
     pages = parse_dump(text)
     if not pages:
         print("no flash dump found")
         return 1
-    samples, notes = decode(pages)
+    samples, notes = decode(pages, interval_nibbles=LOG_FORMATS[args.log_format])
     if csv:
         print("seg,slot,unix,q,temp_c,status,page")
     for s in samples:
@@ -180,7 +189,7 @@ def main():
                     datetime.fromtimestamp(s["unix"], tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S"))
             shown = "  --  " if s["temp"] is None else f"{s['temp']:6.2f}"
             print(f"seg {s['seg']} slot {s['slot']:4d}  {when}  {shown} C  {s['status']}  (page {s['page']})")
-    print(f"# {len(samples)} samples, {len(pages)} pages", file=sys.stderr)
+    print(f"# format={args.log_format}; {len(samples)} samples, {len(pages)} pages", file=sys.stderr)
     for n in notes:
         print(f"# {n}", file=sys.stderr)
     return 0

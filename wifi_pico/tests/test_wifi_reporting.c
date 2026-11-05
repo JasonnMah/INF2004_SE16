@@ -47,7 +47,7 @@ void rt_numbers(const char *format, unsigned a, unsigned b, unsigned c)
     if (strstr(format, "Setup failed:")) ++failures;
 }
 
-#include "firmware/http_test.c"
+#include "../http_service.c"
 
 int main(void)
 {
@@ -55,7 +55,7 @@ int main(void)
     status.ready = status.init_complete = status.join_complete = status.netif_link_up = 1;
     status.dhcp_complete = 1;
     status.dhcp_result = -3; /* Historical DHCP timeout remains latched. */
-    http_test_enable();
+    http_service_enable();
     for (unsigned i = 0; i < 1000; ++i) assert(cyw43_utk_app_poll(&netif) == 0);
     assert(failures == 1 && unavailable == 1 && offline_upload_polls == 1000);
 

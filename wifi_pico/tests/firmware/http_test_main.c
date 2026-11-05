@@ -11,7 +11,7 @@
 #error "Use the isolated SMP USB HTTP build profile."
 #endif
 IMPORT UW tm_usb_state(void);
-extern void http_test_enable(void);
+extern void http_service_enable(void);
 static UW ui_stack[4096/sizeof(UW)] __attribute__((aligned(8)));
 static UW status_stack[4096/sizeof(UW)] __attribute__((aligned(8)));
 static void ui_task(INT code, void *info)
@@ -59,6 +59,6 @@ EXPORT INT usermain(void)
     if (error) rt_fatal("HTTP IPC setup", error);
     start((FP)led_task, 9, status_stack, sizeof(status_stack));
     start((FP)ui_task, 8, ui_stack, sizeof(ui_stack));
-    http_test_enable();
+    http_service_enable();
     for (;;) rt_sleep(1000);
 }

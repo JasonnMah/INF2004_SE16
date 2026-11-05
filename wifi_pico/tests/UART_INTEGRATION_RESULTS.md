@@ -2557,3 +2557,863 @@ Historical standalone probe/scan programs and regenerated raw logs are kept
 local, outside this checkpoint. Required licences/provenance, current test
 source, compact summaries and physical records are included. Local credentials,
 received data, generated binaries/builds and editor settings are excluded.
+
+
+## 2026-10-30 - Three-nibble interval compatibility milestone
+
+Scope: the compressed TIMEBASE interval is now 12 bits (1..4095 whole minutes).
+UART CONFIG remains timestamp:u32 + interval_seconds:u32, little-endian; the
+live adapter validates whole minutes (60..245700 seconds). Frame layout, CRC,
+byte stuffing, ACK/retry/receive timing and duplicate handling are unchanged.
+PC configuration textbox/network delivery to GP20 is NOT implemented here;
+current GP20 still sends timestamp1700000000 and interval3600 seconds.
+
+Compatibility: new encoder pages are `interval12`; old captures are `legacy16`.
+Raw pages have no embedded format version. Both Python tools accept explicit
+--log-format selection; receiver/CSV defaults remain legacy16 for existing
+flashed images. The Sensor dump decoder defaults to interval12 and accepts
+--log-format legacy16. New CSV rows include log_format. Wrong-format input
+cannot generate a CSV in the tested cases; HTTP still preserves its raw binary.
+Do not mix old/new pages in one flash log. No flash migration or erase is done.
+
+| Validation type | Result | Scope |
+| --- | --- | --- |
+| Host shared UART/backend | PASS | Interval boundaries/golden bytes/no-room atomicity, stable source leases, baseline assertions, eight reliability groups |
+| Host live RAM adapter | PASS | Invalid seconds rejected without mutation; 1/4095-minute boundaries; 605 slots over two pages; snapshots, capacity, duplicate/final-ACK recovery, retry exhaustion and CLEAR |
+| Host PC CSV/receiver | PASS | 18 CSV tests and 17 receiver tests; explicit current/legacy formats, timestamps, CRC validation, CLI, downloads, immutable binary storage, lost receipt/dedup |
+| Host HTTP client/network | PASS | Fragmented replies, bounded failures/retries, offline recovery and diagnostic reporting checks |
+| Host combined workflow | PASS | Stable upload buffer, incomplete transfer rejection, retry ownership and Sensor-to-PC exact bytes over host TCP |
+| SDK firmware builds | PASS | Pico SDK 2.2.0, pico_w/RP2040, normal and I2C-diagnostic Sensor images, -Wall/-Wextra, no new source warnings |
+| Local RP2040 emulator | PASS | New normal image: ready and no-USB; new diagnostic image: init-short-write with later valid measurement; CONFIG/retrieval and exact interval12 prefix |
+| Frozen UART emulator modes 0..4 | PASS | Existing binaries reused; both UART byte streams match saved 100-byte golden captures; baseline source unchanged |
+| Physical hardware / Wokwi | PENDING | This format change has not been flashed or physically tested by the agent/user in this milestone |
+
+Read-only compatibility checks also decode the existing six-reading physical
+capture as legacy16: 28.25, 28.25, 30.25, 30.75, 28.50, 28.50 C. The new actual
+ARM emulator snapshot validates as interval12 and decodes to its modeled 25 C.
+This rechecks saved evidence; it is not a new physical test.
+
+Changed files:
+- sensor_pico/encoder.c and encoder.h: interval width, constants and range guard.
+- sensor_pico/tools/decode.py: current/legacy interval widths and CLI selection.
+- wifi_pico/tests/sensor_live_logger/live_logger.c and main.c: seconds-range guard
+  and explicit startup format label; test_live_logger.c, run_tests.py and
+  test_firmware.mjs: boundary/adapter/ARM checks updated for the new record width.
+- shared/uart_protocol/tests/test_codec_transfer.c, run_tests.py and results.json:
+  current codec fixtures and boundary/reliability evidence. Shared protocol source
+  and the frozen uart_protocol project source are unchanged.
+- wifi_pico/tools/temperature_csv.py and http_receiver.py: explicit decoding
+  profile and CSV label; test_temperature_csv.py and test_http_receiver.py cover it.
+- wifi_pico/README.md and this record: instructions/results. No extra Markdown file.
+
+Sensor main/AHT10/RTC/flash code, Wi-Fi application source and active combined
+Wi-Fi UF2 remain unchanged. SHA-256 checks also preserve all existing received
+binary/CSV files. Old Sensor images and edited source originals were copied to
+an external checkpoint before changes:
+C:/Users/idesp/.codex/visualizations/2026/09/29/01a0eafd-f500-7250-864c-b3e0eb56dbd9/interval12-20261030/before/
+
+New build commands from repository root:
+
+```powershell
+.\wifi_pico\tests\sensor_live_logger\build.ps1
+.\wifi_pico\tests\sensor_live_logger\build.ps1 -I2CDiagnostics
+```
+
+New files (generated locally, not committed):
+- wifi_pico/tests/sensor_live_logger/build/sensor_live_logger.uf2
+  SHA-256: 95a78d91baa83f77aa4616e7243d3d506ead7a2dfffcf72c4facfa6973145a28
+- wifi_pico/tests/sensor_live_logger/build/sensor_live_logger_i2c_diag.uf2
+  SHA-256: 92e427d09675dbd23ce39a010be511ff27a1b93055db1fe44b0c208e94add2fb
+
+The next physical check uses the new live Sensor RAM-only image with the
+existing Wi-Fi combined image. The Sensor startup must say format=interval12.
+Run the PC receiver with --decode-jz --timestamp-source simulated
+--log-format interval12. GP20 takes a sample with the existing 60-minute
+configuration; GP21 retrieves, and the next GP21 uploads. Verify the Sensor and
+Wi-Fi lengths/CRC match, HTTP stores the same binary, and CSV shows the sample
+with log_format=interval12. Use --log-format legacy16 for older saved logs.
+No need to reflash Wi-Fi solely for this inner-format change. No physical test
+is claimed here; the startup AHT10 initialization warning remains unresolved.
+
+## 2026-11-01 - Interval12 physical test: Sensor startup
+
+Evidence: user-observed COM6 output after flashing sensor_live_logger_i2c_diag.uf2;
+not an agent-operated hardware test, emulator result or two-board transfer result.
+
+Startup identification: PASS. USB reports format=interval12 (1..4095 minutes),
+bare-metal RAM-only mode, 1024-byte capacity, flash=OFF, RTC=OFF and simulated
+CONFIG timestamps. UART1 is GP4 TX / GP5 RX at 115200 8N1, session11223344.
+Initial samples=0, running=0, frames=0, UART errors=1 and dropped=0 were reported.
+The existing AHT10 warning remains: reset BA returned 1/1 bytes, init E10800
+returned 1/3 bytes (short write), with SDA/SCL high before reset. This startup
+check does not establish that a measurement will succeed or resolve that warning.
+Next: press Wi-Fi GP20 once, confirm CONFIG ACK and one valid stored Sensor
+sample. Interval12 UART retrieval, HTTP upload and CSV physical checks are pending.
+
+### 2026-11-01 - Interval12 CONFIG and two-board retrieval
+
+User-observed physical PASS: Wi-Fi GP20 once produced CONFIG ACK, sequence=1,
+retries=0, and Sensor interval=3600 seconds/timestamp=1700000000 (simulated).
+Sensor measured 25.17 C and stored its first sample. User then pressed GP21 once:
+REQUEST_DATA ACK, 32 DATA blocks, validated TRANSFER_END, 256 received bytes,
+received_log_valid=1 and completion_count=1; request sequence=2, retries=0.
+Sensor snapshot1 and Wi-Fi completion1 both report CRC-16/X-25 e7a0. Sensor
+reported snapshot released after the final ACK. User observed GP6 once for
+CONFIG and twice for retrieval. No physical HTTP/CSV result is established yet.
+
+Read-only host verification of the user's pasted 256-byte capture: CRC e7a0,
+interval12 decoding yields one valid sample, q=261 / 25.25 C, simulated Unix
+1700000000, with inner CHECK C600 valid. The difference from raw 25.17 C is the
+existing 0.25 C quantization. This host analysis is separate from the physical
+observations. The original AHT10 initialization warning remains unresolved,
+although this physical measurement succeeded. Flash and RTC remain OFF.
+Next: start the PC receiver explicitly using --log-format interval12, then
+perform the second GP21 press for HTTP upload and verify the generated CSV.
+
+### 2026-11-01 - Interval12 HTTP upload and CSV generation
+
+User-observed physical PASS: PC receiver bound 192.168.137.1:8000 with JZ CSV
+export enabled, timestamp_source=simulated and log_format=interval12. The next
+Wi-Fi GP21 press uploaded the saved 256-byte log; HTTP201 on attempt1. Wi-Fi
+reported upload complete with Sensor log retained (no automatic CLEAR).
+PC reported one stored binary and a generated one-sample interval12 CSV.
+ID: log-a8ce8847103d81256cc7f022f1475ac3b047680f506b7c5d5bbb251ef5a52686
+Body SHA-256: a8ce8847103d81256cc7f022f1475ac3b047680f506b7c5d5bbb251ef5a52686
+Files: http_received/7e852202bd6e7ab812fd49caaf1decd4dafb57b467557b9bc3d9ca2abd2ebcd2.bin
+and the corresponding .csv. GP6 upload indication was not reported in this step.
+
+Separate read-only host verification of those actual saved files: PASS. The
+256-byte PC binary equals the entire user-pasted Wi-Fi UART capture byte for
+byte, matches the reported SHA-256, and validates inner CHECK C600. CSV has
+one row: sample1, 25.25 C, Unix1700000000, UTC2023-11-14 22:13:20,
+SGT2023-11-15 06:13:20, simulated, status=ok, segment0/slot0/page0,
+log_format=interval12. The raw Sensor reading was 25.17 C before existing
+quarter-degree quantization. Browser download/view has not yet been reported.
+
+The interval12 live AHT10 -> RAM encoder -> two-board UART -> Wi-Fi HTTP -> PC
+binary/CSV generation physical milestone now passes for this one-sample log.
+This does not establish the full interval range on hardware, flash retrieval,
+RTC, sleep/wake/preamble or PC-configured interval delivery. Existing AHT10
+startup short-write warning remains unresolved; the tested sample succeeded.
+
+
+### 2026-11-01 - User confirmed interval12 CSV viewing
+
+User opened the generated one-reading CSV in Excel and confirmed the information
+was displayed correctly. Screenshot shows 25.25 C, simulated, status=ok and
+log_format=interval12. This completes the browser/download/view check for the
+preceding physical interval12 test. It is not evidence for the new PC interval
+input feature described below.
+
+## 2026-11-01 - PC interval input to GP20 CONFIG (physical validation pending)
+
+Implemented: receiver page accepts and persists 1..4095 whole minutes. Clicking
+Save interval does not send a Sensor command. Combined Wi-Fi GP20 performs a
+bounded GET /config through the existing radio/HTTP owner, receives fresh PC Unix
+time plus saved minutes, and calls the existing pico2_send_config() with minutes
+multiplied by 60. The unchanged UART payload is timestamp:u32, interval_seconds:u32
+(little-endian). No changes to framing, CRC, retries, timeout, DATA or duplicate
+handling; no shared/frozen UART or Sensor code changed in this milestone.
+
+HTTP settings use Content-Length:0 and headers X-Config-Version:1,
+X-Config-Minutes and X-Config-Unix-Seconds. The client requires HTTP200, version1,
+all unique required fields, a bounded integer interval and nonzero uint32 time.
+It rejects incomplete/duplicate/malformed fields, overflow, bodies, chunking and
+nonmatching pages. Network failures retain the existing three-attempt bound and
+GETs cannot overlap log POSTs. No interval/time defaults are sent when the fetch
+fails. Existing UART-only, loopback and known-byte HTTP target behaviour remains.
+The PC saves only minutes in logger_settings.json; each GET generates a fresh
+PC timestamp. PC clock accuracy is not validated, and no Sensor RTC is added.
+
+Ownership/task design: same four application tasks and priorities/core placement.
+Communication owns the pending GP20 operation, validates copied results and calls
+UART APIs. The radio task alone uses lwIP, serializing GET and POST. The existing bounded
+radio request/result message buffers carry tagged uploads or copied settings; no
+additional kernel object is allocated. The course CNF_MAX_MBFID is four, and
+setup still creates exactly four buffers (UI, status, radio request, radio result).
+Radio alone owns its pending-request cache, and Communication alone owns its
+pending-result cache. There is no shared writable settings buffer or extra task. UI commands are busy
+while the fetch is pending; UART reception/ticks and duplicate-END ACKs continue.
+GP20 success indication still requires the Sensor CONFIG ACK, not merely HTTP200.
+
+| Check | Result | Scope |
+| --- | --- | --- |
+| HTTP client C host tests | PASS | Existing POST/receipt/retry tests plus GET fragmentation, 1/4095 limits, timestamp overflow, version/framing, 503 retry, exhausted timeout and GET/POST isolation |
+| PC Python host tests | PASS | 18 CSV and 21 receiver tests; invalid input preserves previous settings, settings persist across restart, timestamp fresh, actual C socket GET interoperates with PC receiver |
+| Actual IPC host test | PASS | Production setup/radio functions compiled against a four-buffer model: capacity, copied values, request/result routing, queue backpressure and notifications; no physical SMP claim |
+| Combined C host tests | PASS | New GP20 path, conversion to 60/245700 seconds, timestamp equality, failed/invalid PC fetch sends no UART, fresh recovery, busy buttons, repeated END ACK during pending fetch completes only once; prior retrieval/upload cases retained |
+| UART application host | PASS | All seven existing cases |
+| Two-board UART host | PASS | All ten existing cases and exact binary comparator |
+| Shared UART/backend host | PASS | Baseline assertions and eight reliability groups; current encoder fixtures |
+| Frozen RP2040 emulator | PASS | Modes0..4, existing binaries reused; both UART streams match existing golden captures |
+| Combined SDK/course build | PASS | Pinned SDK2.2.0/course2e8e6ad; RP2040; SMP=1, USB diagnostics, UART0 protocol, emulator disabled, four app tasks; application -Wall/-Wextra/-Werror; no compiler warnings in build log |
+| New-feature physical test | PENDING | No agent flashing, reset, serial-port operation or hardware claim |
+
+Build command from repository root:
+
+```powershell
+.\wifi_pico\build.ps1 -Target combined -PicoSdkPath "$env:USERPROFILE\.pico-sdk\sdk\2.2.0"
+```
+
+UF2: wifi_pico/course/build_make/wifi_pico_combined.uf2 (694784 bytes).
+SHA-256: b605b7c1654ad08e1acd31bf715bb11d64e0ae3465165bfe28350742c0f0c4b7
+ELF size: text344668, data2480, bss77872, total425020 bytes.
+Build log: wifi_pico/course/build_make/combined-build.log.
+Build/static report: wifi_pico/tests/evidence/combined-build.json.
+Source/binary originals backed up outside the project under the Codex session
+pc-config-20261101/before checkpoint before editing. SHA-256 verification keeps
+Sensor source, shared/frozen UART source and existing received binary/CSV intact.
+No commit or push was performed.
+
+Changed files: combined_main.c (startup help), communication.c (asynchronous PC
+fetch/validation and UART CONFIG), kernel_io.c and new pc_config.h (copied IPC),
+upload.c (serialized radio-owner GET/POST), tests/firmware/http_post.c/.h (GET
+using existing bounded HTTP transport), tools/http_receiver.py (form/persistence/
+GET response) and temperature_csv.py (pc-clock label). Tests updated in
+ test_http_post.c, test_http_receiver.py, test_combined.c, test_upload.c,
+ http_socket_adapter.c, new test_radio_ipc.c, run_combined_host_tests.py and
+ verify_http_build.py. The IPC test compiles actual production code with a bounded
+ host kernel model; the build verifier enforces the four-message-buffer limit.
+README and this record updated; existing generated test evidence refreshed.
+No additional documentation file or course/kernel source modification.
+
+Physical checks to guide individually (all pending for this new feature):
+1. Restart the PC receiver with --decode-jz --log-format interval12
+   --timestamp-source pc-clock --output ./http_received/pc_interval. Open its
+   page, save 1 minute; terminal must confirm saved setting. Invalid0/4096 or
+   fractional inputs must not replace it. Saving alone sends no UART command.
+2. Flash only the Wi-Fi Pico with the new combined UF2. Restart Sensor with RUN
+   for fresh test RAM while retaining its already-tested interval12 image.
+   Its static old "demo/simulated"/3600-second banner is not updated in this
+   milestone; use the actual CONFIG values printed on both boards.
+3. GP20 once: Wi-Fi prints reading PC settings, interval1 (60 seconds), current
+   PC Unix timestamp, sending CONFIG and Sensor ACK. Sensor prints matching
+   CONFIG and one immediate sample. GP6 success flash follows Sensor ACK.
+4. Wait at least65 seconds without another GP20: another stored sample should
+   appear. GP21 retrieves; next GP21 uploads; CSV should contain at least two
+   readings with consecutive timestamps60 seconds apart, interval12 and pc-clock.
+5. Save2 minutes and GP20: new CONFIG120 seconds without another firmware build.
+6. Stop receiver then GP20: bounded PC-fetch failure, three failure flashes,
+   no UART CONFIG. Restart receiver and GP20: fresh recovery without board reset.
+7. An unuploaded saved log or active upload still blocks a new CONFIG; current
+   GP21 upload/retry and GP22 explicit clear policies remain unchanged.
+
+Wiring stays Wi-Fi GP0 TX -> Sensor GP5 RX, Sensor GP4 TX -> Wi-Fi GP1 RX and
+common GND; AHT10 Sensor GP0 SDA / GP1 SCL / 3V3 / GND. Sensor remains bare-metal,
+live test RAM-only; flash, external RTC, sleep/wake and preamble remain pending.
+
+### 2026-11-01 - PC interval form: user-observed result
+
+PASS: user restarted the PC receiver on 192.168.137.1:8000 with output
+http_received/pc_interval, timestamp_source=pc-clock and log_format=interval12.
+After saving 1 minute on the browser page, the terminal reported:
+[CONFIG] Saved interval=1 minutes; press Wi-Fi GP20 to apply
+Separate read-only file check confirms logger_settings.json contains
+{"interval_minutes": 1}. No Sensor command or physical GP20 fetch is established
+by this step. Next is flashing the verified combined Wi-Fi image, then checking
+its startup and network readiness before proceeding with CONFIG.
+The UF2 still matches SHA-256 b605b7c1654ad08e1acd31bf715bb11d64e0ae3465165bfe28350742c0f0c4b7.
+
+### 2026-11-01 - New PC-CONFIG Wi-Fi firmware startup: user observed
+
+PASS startup/network readiness after user flashed the new combined Wi-Fi image.
+COM5 identifies the GP20 CONFIG-from-PC-settings build, SensorEmulator disabled,
+four application tasks, pinned course2e8e6ad, SMP1/cores2, UART0 protocol and
+UART_FAULT0. UI reports tk_prc2/core1; Communication and Wi-Fi/HTTP owner report
+tk_prc1/core0. Their first health reports show zero dropped bytes/faults/notify
+errors. Kernel IPC setup progressed to running tasks. Join succeeded and DHCP
+assigned 192.168.137.249; HTTP availability was announced. This does not yet test
+the physical GET /config or Sensor CONFIG payload for PC-provided settings.
+
+COM6 is still the unchanged interval12 RAM-only Sensor test image, with its
+known AHT10 init E10800 short write. It reports samples1, running1, frames35,
+UART errors2/dropped0 and latest25.17 C from the preceding test. These are
+retained counters/data, not evidence of a new CONFIG after this Wi-Fi flash.
+Next: reset only Sensor for empty RAM (samples0/running0), then test GP20.
+Sensor's static simulated-time/3600-second labels remain legacy diagnostics;
+actual CONFIG values will be checked against the new Wi-Fi output.
+
+### 2026-11-01 - Clean Sensor reset before PC-CONFIG test
+
+User-observed PASS: after resetting/reconnecting only Sensor, COM6 reports
+samples0/errors0/running0/full0, capacity1024, UART frames0/rejected0/errors0/
+dropped0, interval12, flashOFF and RTCOFF. This establishes fresh RAM without
+mixing the previous simulated-time sample into the PC-clock trial. The same
+AHT10 reset1/1 then init1/3 short-write warning remains; no new measurement has
+yet been established in this clean run. PC-saved interval remains1 minute from
+the preceding verified form step. Next: Wi-Fi GP20 once; compare PC, Wi-Fi and
+Sensor interval/timestamp, require Sensor ACK and a stored reading.
+
+### 2026-11-01 - PC interval -> GP20 -> Sensor CONFIG: physical PASS
+
+User-observed COM5: GP20 once fetched saved PC settings with HTTP200 on attempt1,
+then sent UART CONFIG with interval1 minute /60 seconds and timestamp1793529552.
+Sensor ACK was received; command sequence1, retries0/limit3.
+User-observed COM6: CONFIG interval60 seconds, timestamp1793529552, followed by
+22.52 C stored=1/total1. User-observed PC terminal: GET returned interval1 minute
+and the identical timestamp1793529552 (PC clock). Therefore the configured
+minutes-to-seconds conversion and exact PC/Wi-Fi/Sensor timestamp delivery pass
+on the physical two-board setup. GP6 indication was not reported in this step.
+Sensor's fixed '(demo, no RTC)' suffix remains a legacy diagnostic label; no
+external RTC was added. This run uses the PC-supplied timestamp.
+Next: no further button presses; wait at least65 seconds after CONFIG and check
+a second automatically stored sample. PC-clock retrieval/upload/CSV verification
+and new PC-fetch failure/recovery tests remain pending.
+
+### 2026-11-01 - Automatic sampling after one-minute PC CONFIG
+
+User-observed PASS for continued automatic acquisition: after the single CONFIG
+interval60/timestamp1793529552, COM6 showed four successful stored samples with
+no additional CONFIG line: 22.52 C total1, 22.71 C total2, 22.73 C total3 and
+22.57 C total4 (each stored=1). No repeated GP20 was required for these readings.
+The sample lines carry no per-reading wall-clock timestamp, so they establish
+continued automatic sampling, not an independently measured exact wall-clock
+period. Encoded 60-second timestamp spacing will be checked after retrieval/CSV.
+Next: GP21 once for UART retrieval; compare Sensor/Wi-Fi length and CRC and
+require validated END/final ACK. Upload remains the following GP21 step.
+
+### 2026-11-01 - PC-clock log retrieval: physical PASS
+
+User-observed Wi-Fi GP21 retrieval: REQUEST ACK, 32 DATA frames ACKed, validated
+TRANSFER_END, received_log_valid1, bytes256, blocks32, completion_count1, command
+sequence2/retries0. Sensor snapshot1 reports the same256 bytes/CRC16-X25 4949,
+then final-ACK release. Sensor continued with sample105 (22.03 C stored1), which
+is subsequent live data and does not change the already captured Wi-Fi snapshot.
+GP6 indication was not reported in this step.
+
+Separate read-only host verification of all256 user-pasted UART bytes: CRC4949,
+SHA-256 5dc01fac579dd762d67a09c080f140236d58e6b711a3ac539e9dcea6c54513b8.
+Interval12 decoding yields104 valid sample slots, first Unix1793529552/22.50 C,
+last Unix1793535732/22.00 C; every consecutive encoded timestamp is60 seconds
+apart. The first four quantized values are22.50,22.75,22.75,22.50 C, matching
+the earlier raw readings under the existing0.25 C quantization. Inner CHECK8237
+validates. UTC span2026-11-01 10:39:12 to12:22:12 (SGT18:39:12 to20:22:12).
+These are decoded CONFIG-based timestamps, not an independently verified RTC or
+per-sample wall-clock measurement. Host analysis is distinct from user-observed
+physical transmission. Next GP21 uploads this immutable104-sample snapshot;
+PC-clock HTTP/CSV storage and viewing remain pending.
+
+### 2026-11-01 - PC-clock 104-sample HTTP/CSV flow: physical PASS
+
+User-observed second GP21 press uploads the saved256-byte snapshot with
+ID log-5dc01fac579dd762d67a09c080f140236d58e6b711a3ac539e9dcea6c54513b8.
+Wi-Fi reports HTTP201 on attempt1 and Sensor log retained. User observed GP6
+one long success flash. PC reports identical SHA-256, stored256 bytes and
+CSV samples104, timestamp_source=pc-clock, log_format=interval12.
+Files under http_received/pc_interval use stem
+334b19836a86d8d0bc97011a30ff55d453a7097b954b07af09d96fd4c759f000.
+
+Separate read-only verification of actual saved files: PASS. The .bin exactly
+equals all256 previously user-pasted UART bytes and matches the reported SHA.
+CSV has104 rows, all status=ok, interval12 and pc-clock; each consecutive encoded
+Unix timestamp increases60 seconds. First sample22.50 C, Unix1793529552,
+SGT2026-11-01 18:39:12; last sample22.00 C, Unix1793535732,
+SGT2026-11-01 20:22:12. The first four quantized temperatures match the raw
+readings reported earlier. This is file verification, not an agent hardware test.
+
+Physical happy-path milestone passes: PC save1 minute -> GP20 HTTP settings/time
+fetch -> unchanged UART CONFIG60 seconds -> Sensor automatic AHT10/RAM logging ->
+GP21 UART retrieval -> next GP21 HTTP POST -> PC exact binary and decoded CSV.
+The current CSV's browser/download/view confirmation, changing interval without
+reflash, invalid input and PC-fetch failure/recovery tests remain pending.
+Real flash/RTC/sleep/wake/preamble integration remains outside this result.
+
+
+## 2026-11-01 - Simplified user CSV (PC-only change)
+
+User requested removing unix_seconds, log_format, segment, slot and page from
+user-visible CSV. Default export now contains six columns: sample,
+temperature_c, timestamp_utc, timestamp_sgt, timestamp_source and status.
+Internal decoded slot/segment/page/Unix values remain available for reconstruction
+and validation. Sample is the global export row number; slot is an internal
+counter that can reset at a new TIMEBASE, so they are not interchangeable inside
+the decoder. Explicit interval12/legacy16 parsing and all CRC checks remain.
+
+Both temperature_csv.py and http_receiver.py support --diagnostic-columns to
+export the former eleven columns on request. Timestamp source remains explicit
+because PC clock, earlier simulated data and a future RTC are distinct sources.
+No Sensor, shared protocol, Wi-Fi firmware, kernel, button or HTTP policy change.
+Only the exporter, receiver, their existing Python tests and existing docs changed.
+
+Validation: PASS20 CSV tests and21 receiver tests, plus retained C HTTP/network
+host checks. Coverage includes current/legacy formats, identical readings in
+normal/diagnostic views, SENSOR_ERR blanks/status, sample numbering across a
+TIMEBASE slot reset, CLI defaults, HTTP downloads and optional diagnostic fields.
+No new physical firmware test is claimed for this PC presentation change.
+
+The user's Downloads/temperature-log-334b19836a86.csv matched the original
+104-row PC CSV byte for byte. Before changing output, the full PC CSV and edited
+source originals were backed up outside the project in the Codex session
+csv-cleanup-20261101/before checkpoint. The PC's corresponding current CSV under
+http_received/pc_interval was regenerated from its original256-byte .bin using
+the new default. Verification confirms104 rows and exact equality of every
+retained cell to the original, including both timestamps and all temperatures.
+The .bin retains SHA-256
+5dc01fac579dd762d67a09c080f140236d58e6b711a3ac539e9dcea6c54513b8.
+The original downloaded copy and other earlier PC files are untouched. The same
+CSV download URL now serves the regenerated six-column file. Restart the PC
+receiver with its existing command to use the updated exporter for later uploads;
+saved one-minute settings persist. User viewing of the new six-column download
+has not yet been reported. The earlier104-row downloaded evidence remains valid.
+No commit/push performed; no new Markdown file added.
+
+
+### 2026-11-01 - Final user CSV layout: four columns
+
+User requested sample, temperature_c, timestamp_sgt and status only. This is now
+the default in both PC exporters. UTC and timestamp_source join Unix seconds,
+segment, slot, page and log_format in optional --diagnostic-columns output.
+No additional field is required for the current single-Sensor user view; status
+retains failed-reading visibility. Timestamp reconstruction, source validation,
+legacy/current decoding and original binary storage are unchanged.
+PASS20 CSV tests and21 receiver tests plus existing HTTP/network host checks.
+The existing104-row PC CSV was regenerated with exactly the four requested
+columns; every retained value equals the prior six-column file. Diagnostic
+export reproduces the original downloaded eleven-column CSV byte for byte.
+Original binary SHA5dc01fac579dd762d67a09c080f140236d58e6b711a3ac539e9dcea6c54513b8
+and original Downloads copy are unchanged. Before-edit files are backed up outside
+the project in the Codex session csv-four-columns-20261101 checkpoint.
+PC receiver restart is needed for future uploads; current download is refreshed.
+No Pico code/build/flash action, commit/push or extra Markdown file.
+
+### 2026-11-01 - Interval change without reflash: physical PASS
+
+User saved2 minutes on the existing PC page and pressed Wi-Fi GP20. COM5 reports
+HTTP200 on fetch attempt1, interval2 minutes/120 seconds, timestamp1793538100,
+then Sensor CONFIG ACK with sequence36 and UART retries0/limit3. COM6 reports
+CONFIG120 seconds with exactly1793538100, followed by21.44 C stored1/total144.
+This confirms PC settings changes reach Sensor through the existing UART payload
+without a firmware rebuild/reflash under this test procedure. The continued
+sample total shows existing RAM readings were retained. GP6 was not reported.
+User previously confirmed the refreshed PC receiver/CSV displays the requested
+four-column layout. Earlier raw data and download preservation checks remain.
+Next: stop only the PC receiver and press GP20 once, require bounded fetch
+failure/no new Sensor CONFIG and three failure flashes; recovery is tested after
+that observation. Sensor should continue sampling at the last accepted120 seconds.
+
+### 2026-11-01 - PC receiver unavailable: physical failure handling PASS
+
+User stopped only the PC receiver and pressed Wi-Fi GP20. COM5 reports settings
+fetch attempts1/3,2/3,3/3, then connect timeout with HTTP0/attempts3 and
+'[UI] CONFIG not sent: PC settings unavailable or invalid...'. User observed
+GP6 three short flashes after failure. The bounded network-failure/UI indication
+passes; Wi-Fi reports no UART CONFIG started and no demo fallback. A COM6 trace
+was not supplied for this step, so no separate Sensor-side observation is claimed.
+This is an expected injected PC-service outage, not evidence of a new UART fault.
+Next: restart the same PC receiver/output folder (saved interval2 minutes), then
+GP20 once and verify HTTP fetch/UART ACK/matching Sensor CONFIG120 seconds and
+fresh timestamp without resetting or reflashing either board. Recovery pending.
+
+
+### 2026-11-01 - PC receiver restart: no-reboot recovery physical PASS
+
+User restarted only the PC receiver with the same output folder; saved interval2
+minutes loaded without another settings save. On GP20, COM5 reports HTTP200 on
+fetch attempt1, PC interval2 minutes/120 seconds and timestamp1793539267. UART
+CONFIG was acknowledged with sequence37/retries0. COM6 reports the identical
+interval/timestamp and a24.09 C reading stored1/total154. PC terminal independently
+reports GET interval2 minutes/timestamp1793539267. Neither Pico was reset or
+reflashed under the test procedure; Sensor count144->154 and UART command
+sequence36->37 are consistent with continuity across the injected PC outage.
+The sequence advancing only once is also consistent with no UART CONFIG sent
+while the PC fetch failed. GP6 success indication was not reported in this step.
+
+The PC-interval milestone's physical functional checks now pass: persisted
+1..4095-minute input mechanism (1 and2 minutes physically exercised; range bounds
+covered by host tests), fresh PC timestamp delivery, minute-to-second UART CONFIG,
+automatic sampling, exact104-reading RAM/UART/HTTP/CSV flow, four-column CSV user
+view, settings change without firmware update, bounded PC-unavailable failure and
+recovery without resetting either Pico. The4095-minute boundary has host coverage,
+not a physical multi-day wait. No independent RTC/clock-accuracy claim is made.
+Sensor remains the RAM-only live AHT10 test; real flash-backed UART retrieval,
+batched retrieval/upload, external RTC, sleep/wake and preamble remain pending.
+The existing AHT10 initialization short-write warning remains unresolved despite
+successful readings. No source code or firmware changed for recording this result;
+no commit/push performed. Next development milestone is flash-backed UART with
+bounded batches while retaining these tested RAM/standalone regression targets.
+
+
+## 2026-11-01 - GP6 activity indication (physical validation pending)
+
+User requested GP6 blinking while data transfers. Implemented in the Wi-Fi
+application: GP6 blinks100 ms on/off while a GP21 UART retrieval attempt or HTTP
+upload is active, including existing retry/backoff waits. CONFIG/PC-settings fetch
+and CLEAR keep their existing finite result indications. Success/failure events
+end the activity blink and use the same patterns: CONFIG200 ms, retrieval two
+150 ms pulses/100 ms gap, CLEAR500 ms, upload700 ms, failure three100 ms pulses.
+No artificial transfer delay, UART/HTTP wire change or reliability timing change.
+Very short successful uploads may finish before multiple busy blinks are visible.
+
+Status Task alone owns GP6. Communication sends a bounded activity event at most
+once per250 ms while its UART operation or borrowed HTTP snapshot is active.
+Events use the existing status queue. Each activity event expires after1000 ms;
+a delayed old event is ignored, and losing a final indication cannot leave the
+LED blinking forever. Heartbeats extend activity without restarting blink phase.
+A bounded queue drain lets completion/failure supersede older activity events.
+The same four application tasks and four kernel message buffers remain.
+
+Files: app.h (named UI constants/Status owner-step declarations), communication.c
+(activity events), status.c (non-blocking timing), combined_main.c (single startup
+build marker), new tests/test_status.c (actual state-machine host tests),
+tests/test_combined.c and run_combined_host_tests.py (actual workflow event checks).
+Existing README and this record updated; no additional Markdown file. Sensor,
+shared/frozen UART source, HTTP client and four-column CSV code are unchanged.
+
+Host results: PASS actual Status Task timing with manual clock, preserved finite
+patterns, heartbeat phase, stale events, expired indication and no stuck LED.
+PASS UART/HTTP workflow activity, stop after UART timeout and upload failure,
+new retry activity, success stop and no activity during PC CONFIG. Existing
+combined ownership/retry/duplicate-END and exact host TCP tests pass. All seven
+UART application and ten two-board host cases pass. These tests do not establish
+physical LED timing or physical SMP behavior for the new image.
+
+Build/static: PASS pinned SDK2.2.0/course2e8e6ad, RP2040 Pico W, SMP1, USB,
+SensorEmulator disabled, four app tasks/four message buffers. No compiler
+warnings/errors; own application compiles with -Wall/-Wextra/-Werror. Protected
+SHA-256 checks confirm Sensor/shared/frozen UART source unchanged. Previous
+working image/source backed up outside the project in Codex session checkpoint
+transfer-led-20261101/before. No agent flashing/reset or commit/push performed.
+
+Build from repository root:
+
+```powershell
+.\wifi_pico\build.ps1 -Target combined -PicoSdkPath "$env:USERPROFILE\.pico-sdk\sdk\2.2.0"
+```
+
+UF2: wifi_pico/course/build_make/wifi_pico_combined.uf2 (695808 bytes).
+SHA-256: 6d8c7b9945742519e5bdeb1a07bcfb80bc79cef7a565c7ddc4168e1db244f07d
+ELF size: text345252, data2480, bss77912, total425644 bytes.
+Compared with the preceding working image, text grows584 bytes and bss40 bytes;
+no dynamic allocation is added. Startup prints:
+[BUILD] GP6 activity blink=100 ms on/off during UART retrieval and HTTP upload
+
+Physical checks to guide individually: flash only the Wi-Fi Pico, confirm this
+startup marker and existing Wi-Fi/UART readiness. GP20 CONFIG must retain its
+normal ACK/success pattern. First GP21: activity blink while retrieving, then two
+success flashes. Second GP21: blink while uploading, then one long success flash.
+For a clearly visible sustained indication, a later test can stop only the PC
+receiver after retrieval: upload waits/retries must blink, then end with three
+failure flashes; saved bytes must remain available for the existing retry flow.
+No need to change Sensor firmware, wiring, PC CSV format or stored PC settings.
+Preamble/sleep work remains pending JZ's exact sleep-function confirmation.
+
+### 2026-11-01 - Activity-LED image physical transfer flow; visual activity pending
+
+User flashed the activity build; COM5 includes GP6 activity blink100 ms marker,
+SMP1/cores2/four tasks, external Sensor and Wi-Fi ready192.168.137.249. GP20
+fetched2 minutes/current PC timestamp1793542650 (HTTP200 attempt1) and Sensor
+CONFIG ACK (sequence1/retries0). Sensor stored24.27 C as sample183.
+
+Physical transfer functionality PASS: COM5 capture contains retrieval completion1,
+upload HTTP201 on attempt1, then retrieval completion2. Both captures are256
+bytes/32 blocks/CRC16-X25 cc17. Sensor snapshots2 and3 match that length/CRC and
+both report final-ACK release. PC stored bodySHA256
+0bae1516db707b70b636f2faf930325b8dbda508a9e31a3b99f37a325360f066,
+with183 CSV readings in pc_interval/3d02495e0ceb7a428dbce4620171f14e7c075b6837dfa52b68d3f7ef7e86bebe.csv.
+User described GP21 twice; the supplied COM5 transcript contains three accepted
+GP21 events (retrieve/upload/retrieve). No button/debounce fault is inferred;
+last captured workflow state is a saved log waiting to upload.
+
+Separate read-only host verification PASS: both full UART snapshots are identical,
+match the actual PC .bin exactly, CRCcc17 and inner CHECKD297 validate, and
+interval12 decoding/actual four-column CSV each contain183 readings. Last encoded
+reading is24.25 C under existing0.25 C quantization. These183 readings still fit
+in one256-byte page, so their transfer size is unchanged from earlier shorter
+logs. More readings within the same page do not lengthen UART transmission.
+
+User has not yet confirmed sustained GP6 activity blink or result pulses on this
+new image; no physical visual timing PASS is claimed. Next: stop only the PC
+receiver and press GP21 once from the captured waiting-upload state. Busy blink
+should continue through bounded HTTP connect/retry waits, then switch to three
+failure flashes and retain the saved snapshot. This verifies visible upload
+activity/wait indication, not sustained successful payload transmission. No
+firmware change, generated samples or artificial transport delay is required.
+
+### 2026-11-01 - GP6 sustained activity observed; error feedback usability
+
+User confirms GP6 blinked continuously during the instructed upload retry/wait
+check. This is user-observed physical confirmation of sustained activity
+indication. User reports the final three-flash error pattern is easy to miss
+because it follows continuous blinking. No fresh COM5 failure trace was supplied
+for this observation; no additional transfer/recovery claim is made.
+User proposes an error-only buzzer. Hardware/source inspection identifies the
+Maker Pi Pico onboard piezo at GP18 with mute switch (Cytron Rev1.2 datasheet);
+checked active Wi-Fi application pin assignments do not use GP18. Recommended
+policy is silent activity/success/recovered retries, three short beeps only for
+terminal user-operation failure, keeping the LED failure pattern as a visual
+backup. Existing Status Task can own both outputs without a new task. This is
+currently a recommendation: buzzer code, build and physical test are not yet done.
+No firmware/source changes made for this design discussion.
+
+
+### 2026-11-02 - GP18 terminal-error buzzer implemented; physical check pending
+
+Approved error-only feedback implemented in the existing Status Task: three
+100 ms, 2 kHz beeps with 100 ms gaps, synchronized with the existing three
+failure LED flashes. Activity, successes and intermediate retries remain silent.
+All existing LED timings and UART/HTTP behavior are preserved. No task, message
+buffer, blocking tone delay or PWM interrupt was added. New valid activity or
+result events cancel the previous tone; initialization and completion are silent.
+
+Changed application files: app.h (adapter declarations), kernel_io.c (GP18 PWM
+adapter using course BSP), status.c (non-blocking envelope), combined_main.c
+(build marker). Extended tests/test_status.c and updated README.md/this record;
+no new documentation files. Course sources, shared protocol sources, Sensor
+sources and uart_protocol baseline remain unchanged from pre-buzzer state:
+333 protected-file SHA-256 comparisons PASS. Existing unrelated local changes
+were preserved. Pre-change files and working ELF/UF2 are backed up outside the
+repository under the Codex visualization workspace, error-buzzer-20261102/before.
+
+Hardware review: Cytron Maker Pi Pico Rev1.2 datasheet identifies GP18 and its
+mute switch. GP18 uses PWM slice 1/A; no active application uses its other aliases.
+The course USE_PTMR=0 profile leaves PWM in reset, so the adapter releases PWM
+through the RP2040 atomic-clear alias, avoiding concurrent UART/radio reset races.
+Only slice 1 is configured; divider 1, TOP 62499 and compare 31250/0 at 125 MHz.
+The kernel uses SysTick; enabling course physical timers is guarded at compile
+time until slice ownership is explicitly resolved. Tone generation needs no IRQ.
+Sources: https://files.seeedstudio.com/products/103030396/Maker%20Pi%20Pico%20Datasheet.pdf
+and https://datasheets.raspberrypi.com/rp2040/rp2040-datasheet.pdf (atomic register
+access and PWM).
+
+Build/static PASS: pinned Pico SDK 2.2.0, Pico W RP2040, course commit
+2e8e6ad480c2d84a369b12995694b9bf5e9ddfb3; actual SMP=1, USB console,
+four application tasks, Sensor emulator disabled. No compiler warnings reported
+in the final build log. From the repository root:
+
+```powershell
+.\wifi_pico\build.ps1 -Target combined -PicoSdkPath "$env:USERPROFILE\.pico-sdk\sdk\2.2.0"
+```
+
+UF2: wifi_pico/course/build_make/wifi_pico_combined.uf2
+Bytes: 696832; SHA-256: 900aa25773bd165cfde7da08f3b503f12bc7e290e037ffc3a0f8145e2ed3f806
+arm-none-eabi-size: text 345828, data 2480, bss 77912, total 426220.
+
+Host PASS (ASAN/UBSAN): actual Status Task tests verify exactly three beep
+onsets, 100 ms envelope timings, silent activity/success, cancellation and silent
+reinitialization. Existing combined tests also PASS: UART failure/recovery,
+completed-log ownership, repeated END ACK without double completion, PC CONFIG,
+HTTP lost receipt/duplicate handling and exact Sensor-model-to-PC byte equality.
+Existing UART host suite: 7/7 PASS. External-endpoint host suite: 10/10 PASS,
+plus binary comparator positive/negative checks. These are host models, not new
+RP2040 emulator runs or physical board results.
+
+Physical buzzer result: PENDING. First step: flash only Wi-Fi Pico, unmute its
+carrier buzzer, open USB serial and confirm the marker below with silent startup:
+
+```
+[BUILD] Error buzzer=GP18; three short beeps on final failure only
+```
+
+Then test one failure at a time: with PC receiver stopped, GP20 should exhaust
+its existing settings fetch attempts, send no UART CONFIG and produce three
+beeps/three short flashes only at final failure. Restart receiver; successful
+GP20 should be silent with the usual success flash. After retrieval, stopping
+receiver before the upload press should give silent activity/retries followed
+by three failure beeps and retained upload bytes. Restart receiver and retry:
+success should be silent and preserve the Sensor log. Do not use GP22 to induce
+an error, since CLEAR changes the stored log. No hardware action was performed
+by the agent. No commit or push was made.
+
+
+### 2026-11-02 - Pre-SOF transport preamble; awake-peer milestone
+
+Implemented at Wi-Fi uart_io.c's existing write adapter, combined image only:
+32 bytes of 0x55 immediately precede every outgoing UART0 frame. This covers
+CONFIG, REQUEST_DATA, CLEAR and their retransmissions, plus DATA/END ACKs and
+NACKs. No preamble is sent for an HTTP-only upload press or a refused/invalid
+command. Sensor replies are unchanged. The same Communication Task writes the
+prefix and original stuffed frame in one bounded buffer/write; no new task,
+dynamic allocation, sleep/gap or retry/timeout change. Prefix duration is about
+2.78 ms at 115200 8N1. Existing GP6 activity and GP18 error buzzer are retained.
+
+The original encoded frame is copied unchanged after the prefix: framing, CRC,
+escaping, payload and session/sequence fields remain identical. Preamble bytes
+never enter the reconstructed compressed log or HTTP body. The current shared
+Sensor parser ignores bytes before SOF; it needs no new protocol code. Host
+wire tests deliver every prefix byte to that real parser, rather than stripping
+it from the simulated Sensor input. Frame-level test observers alone inspect
+a stripped view for their existing counters/fault injection.
+
+Changed this milestone: app.h (named provisional prefix constants), uart_io.c
+(transport wrapper), combined_main.c (one startup diagnostic),
+tests/test_combined.c and tests/run_combined_host_tests.py (focused regression),
+README.md and this record. No new documentation files. Existing unrelated local
+changes are preserved. 333 protected-file SHA-256 comparisons PASS: Sensor,
+shared protocol and frozen uart_protocol sources are unchanged. UART-only and
+single-board loopback image send paths remain unchanged (APP_COMBINED=0).
+Pre-change files plus working buzzer ELF/UF2 are backed up outside the repository
+in the Codex visualization workspace, uart-preamble-20261102/before.
+
+Build/static PASS: Pico W RP2040, pinned SDK 2.2.0/course revision
+2e8e6ad480c2d84a369b12995694b9bf5e9ddfb3, actual SMP=1/cores2/four application
+tasks, external Sensor, USB diagnostics. No compiler warnings in the build log.
+Command from repository root:
+
+```powershell
+.\wifi_pico\build.ps1 -Target combined -PicoSdkPath "$env:USERPROFILE\.pico-sdk\sdk\2.2.0"
+```
+
+UF2: wifi_pico/course/build_make/wifi_pico_combined.uf2
+Bytes: 697344; SHA-256: 6dcfcaf0b5106f4f72e6bb93550f6776aa719ac5adaf9057a2fc30746bd72391
+Size: text346060 data2480 bss77912 total426452.
+
+Host regression PASS (ASAN/UBSAN): prefix exact byte/count/order before SOF;
+awake Sensor CONFIG/retrieval/CLEAR; original plus three CONFIG retries each
+prefixed; retry exhaustion/fresh CONFIG recovery; empty retrieval; HTTP-only
+press emits no UART prefix. Existing combined cases PASS, including lost final
+ACK/repeated END with exactly one completion, incomplete/oversize transfer
+rejection, stable upload ownership, PC CONFIG limits and unchanged exact bytes
+through HTTP/lost-receipt deduplication. UART-only host tests7/7 PASS;
+external-endpoint host tests10/10 PASS plus binary comparator checks.
+No new RP2040 emulator run or physical preamble test is claimed.
+
+Sleep/wake result: NOT IMPLEMENTED/NOT TESTED. User reports JZ tentatively uses
+sleep_goto_sleep_until; actual setup remains unavailable. Unmodified pico-extras
+RP2040 implementation gates UART clocks. This prefix alone does not enable a
+wake source or restore clocks/UART1. A measured wake/recovery interval and GPIO
+wake setup still need the actual Sensor implementation. Current32-byte duration
+is adjustable in app.h and provisional, with no guarantee for a sleeping peer.
+The Sensor must remain awake during a command/transfer. Reference inspected:
+https://github.com/raspberrypi/pico-extras/blob/master/src/rp2_common/pico_sleep/sleep.c
+
+Physical next step only: flash Wi-Fi image, keep current live Sensor firmware
+awake and unchanged, start USB monitoring and confirm:
+
+```
+[BUILD] UART preamble=32 bytes of 0x55 before SOF; sleep wake-up UNVERIFIED
+```
+
+Then, one test at a time, run normal PC CONFIG/retrieval/upload and compare
+Sensor/Wi-Fi/PC length and integrity evidence; test CLEAR only after preserving
+wanted logs. This verifies awake compatibility, not waking from sleep. No board
+was flashed, reset or physically tested by the agent. No commit/push performed.
+
+
+### 2026-11-02 - User-observed GP20 failure buzzer PASS
+
+User flashed the combined image whose startup includes GP18 error buzzer and
+32x0x55 preamble markers. Wi-Fi eventually connected at192.168.137.12.
+With PC receiver stopped, a GP20 press produced PC configuration attempts1/3,
+2/3 and3/3, then connect timeout (HTTP=0 attempts=3) and CONFIG-not-sent.
+User explicitly reports three beeps and three GP6 flashes synchronized with
+the beeps. Physical error-buzzer pattern PASS for final PC CONFIG fetch failure.
+No new COM6 capture was provided for this failure. Silence on every retry,
+successful CONFIG with the new image, upload error beeps and sleeping-Sensor
+wake-up are not inferred from this observation. This is a user-observed
+physical result, separate from host and build checks.
+
+
+### 2026-11-02 - GP20 loading indication implemented; physical check pending
+
+Requested user-facing change: accepted GP20 CONFIG operations blink GP6 slowly,
+400 ms ON/400 ms OFF, throughout PC settings fetch and Sensor CONFIG ACK waits,
+including retries. Loading is silent. Completion replaces loading with the
+existing CONFIG success flash or three synchronized failure flashes/beeps.
+GP21 retrieval/upload retains its100 ms activity blink. No artificial delays
+or changes to command sequencing, timeout/retry values, UART frames/preamble,
+HTTP behavior or Sensor code. Instant responses need not show a full blink.
+
+The existing Communication Task sends a loading status while config_fetching
+or an APP_CONFIG operation is active. The existing Status Task chooses the
+blink period and shares existing250 ms heartbeats/1000 ms expiry. Heartbeats
+preserve phase; expired events cannot restart loading. No new task, timer,
+queue, dynamic allocation or buzzer hardware code. Existing priorities/core
+assignments remain unchanged. UART-only/loopback images do not emit this new
+CONFIG loading event (it is enabled only in APP_COMBINED application logic).
+
+Files changed this milestone: app.h, status.c, communication.c, combined_main.c;
+extended tests/test_status.c, tests/test_combined.c and
+tests/run_combined_host_tests.py; existing README.md and this record. Existing
+unrelated changes preserved. Pre-edit source/image backup is outside repository
+under Codex visualization workspace gp20-loading-20261102/before.333 protected
+file SHA-256 comparisons PASS for frozen UART, shared protocol and Sensor files.
+
+Build/static PASS: pinned SDK2.2.0, Pico W RP2040, course
+2e8e6ad480c2d84a369b12995694b9bf5e9ddfb3; actual SMP=1/cores2/four application
+tasks, USB diagnostics, external Sensor. No compiler warnings in final build log.
+Command from repository root:
+
+```powershell
+.\wifi_pico\build.ps1 -Target combined -PicoSdkPath "$env:USERPROFILE\.pico-sdk\sdk\2.2.0"
+```
+
+UF2: wifi_pico/course/build_make/wifi_pico_combined.uf2
+Bytes:697856; SHA-256:167b0b539ed8d8578dddb70e24fb4ab0882b2062998394e49f383ad79f67cbd9
+arm-none-eabi-size: text346220 data2480 bss77920 total426620.
+
+Host PASS (ASAN/UBSAN): actual Status Task400 ms timing, silent loading,
+heartbeat phase preservation, loading/transfer speed changes, stale events,
+expiry, success transition and three-beep failure transition. Actual application
+checks PC-fetch hold/failure without a UART command, loading through Sensor
+CONFIG retries/exhaustion, stopping on final results and successful fresh retry.
+Existing combined ownership, protocol/preamble, loss recovery, byte equality
+and HTTP deduplication regressions PASS. Preserved UART host tests7/7 PASS;
+external-endpoint host tests10/10 PASS plus comparator checks. No new RP2040
+emulator or physical slow-blink test was performed.
+
+New physical check PENDING: flash only Wi-Fi image and confirm startup marker:
+
+```
+[BUILD] GP20 loading blink=400 ms on/off while waiting for PC settings and Sensor ACK
+```
+
+With receiver stopped and Wi-Fi connected, GP20 should blink slowly and
+silently through all existing fetch attempts; final failure stops loading and
+produces three short flashes/beeps. Afterwards restart receiver, retry GP20,
+and check silent loading followed by CONFIG success flash/ACK. Test one step
+at a time. User's preceding three-beep physical PASS applies to the previous
+image and is recorded separately above; it does not establish physical slow
+loading behavior for this new image. No commit/push performed.
+
+
+### 2026-11-04 - Source cleanup and shared library checkpoint
+
+Behavioral changes: none intended. Active combined_main.c moved to main.c;
+UART-only main.c preserved under tests/firmware/uart_main.c. Active HTTP
+client/service and network_retry.h moved to the application root. The service
+activation name is now http_service_enable. Build/test references were updated.
+
+shared/uart_protocol now supplies real static archives to the course Make
+profiles through library.mk. CMake endpoint aliases uart::sensor/gateway/wire
+are available; both live Sensor CMake targets now link uart::sensor. Shared
+wire/endpoint source, JZ Sensor source and pinned course source remain byte-exact
+relative to the pre-cleanup working tree. No existing uncommitted work was reset.
+Protected source comparison: 695 files PASS. All baseline source/fixture hash entries are unchanged.
+Five obsolete guide presence entries were removed and the shortened baseline
+README checksum was updated. This is explicitly documentation cleanup, not
+weakened firmware or golden-wire comparison. All prior files were preserved in
+the checksum-verified external INF2004_SE16_before_cleanup.zip (900 source and
+evidence files). Historical startup/scan diagnostic projects and five guides
+were removed from the active tree; their source remains in that archive.
+Licences, course provenance/import audit, golden fixtures and test evidence
+remain. No new Markdown guide was added. Current READMEs were shortened.
+
+Build/static PASS using SDK2.2.0: combined, UART-only, Sensor loopback, known-byte
+HTTP and SMP boot profiles, with actual SMP=1 and USB console checks. Normal
+and I2C diagnostic live Sensor targets both build against uart::sensor.
+The combined build is the final active profile.
+
+Local RP2040 emulator PASS for baseline modes0/1/2/3/4; all five firmware builds
+PASS and original golden UART byte comparisons remain strict. New baseline
+results are in uart_protocol/build/regression/results; Wokwi was not run.
+
+Host PASS: shared archive/backend and eight reliability groups; combined
+workflow/byte equality/preamble/loading/buzzer; HTTP/client reporting/retries;
+20 CSV tests and21 receiver tests;7 UART application cases;10 external-peer
+cases and comparator checks; live adapter605 sample slots/two pages.
+These are automated host/model results, not new physical evidence.
+
+User-observed update recorded from chat: GP20 slow blinking through PC retries
+followed by three synchronized error flashes and beeps PASS. Earlier RAM
+end-to-end, timeout/recovery, duplicate, HTTP and SMP physical evidence remains
+scoped to its recorded runs. No new physical or Wokwi test after cleanup.
+
+Still pending: integrated flash retrieval/verified CLEAR and batching, external
+RTC, sleeping-Sensor wake configuration/timing, long-hold flash CLEAR, AHT10
+startup fix and stronger reconnect/stress validation. Repeat the ordinary
+CONFIG/retrieve/upload flow on cleaned images before the lab demonstration.
+
+A Word handover was created outside the repository and rendered for page review.
+It covers current progress, code/file map, shared API, UART frames, HTTP/PC flow,
+builds/wiring and unfinished work. No commit or push was performed.
+Final combined UF2 SHA-256: 5259f5072fe7fe378fb0f067cc856c87577cbc10ea9f7b3bbaeae4a53b9e897d

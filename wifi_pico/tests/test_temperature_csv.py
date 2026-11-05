@@ -2,6 +2,7 @@
 """PC-only checks of JZ decoding, validation and CSV export; no Pico hardware."""
 import csv
 import importlib.util
+import io
 from pathlib import Path
 import subprocess
 import sys
@@ -21,8 +22,8 @@ def field(value, length):
     return [int(char, 16) for char in f'{value:0{length}x}']
 
 
-def start(q=273, minutes=60, timestamp=1700000000):
-    return [7, 3, 7, 1, *field(timestamp, 8), *field(minutes, 4), 8, *field(q, 3)]
+def start(q=273, minutes=60, timestamp=1700000000, interval_nibbles=4):
+    return [7, 3, 7, 1, *field(timestamp, 8), *field(minutes, interval_nibbles), 8, *field(q, 3)]
 
 
 def seal(nibs):
@@ -36,6 +37,61 @@ def page(nibs):
 
 
 class CsvTests(unittest.TestCase):
+    def test_interval12_limits_slots_and_legacy16_still_readable(self):
+        for minutes in (1, 60, 4095):
+            for fmt, width in (('interval12', 3), ('legacy16', 4)):
+                data = page(seal(start(minutes=minutes, interval_nibbles=width) + [1, 7, 2, 9]))
+                samples, _ = exporter.decode_binary(data, fmt)
+                self.assertEqual([s['temp'] for s in samples], [28.25, 28.5, None, 28.25])
+                self.assertEqual([s['unix'] for s in samples],
+                                 [1700000000 + n * minutes * 60 for n in range(4)])
+        # Historical four-nibble logs can exceed the new input limit.
+        samples, _ = exporter.decode_binary(page(seal(start(minutes=65535) + [0])), 'legacy16')
+        self.assertEqual(samples[1]['unix'] - samples[0]['unix'], 65535 * 60)
+
+    def test_wrong_format_and_zero_interval_rejected(self):
+        current = page(seal(start(interval_nibbles=3)))
+        for data, fmt in ((current, 'legacy16'), (CAPTURE, 'interval12'),
+                          (page(seal(start(minutes=0, interval_nibbles=3))), 'interval12'),
+                          (current, 'guess')):
+            with self.subTest(fmt=fmt), self.assertRaises(ValueError):
+                exporter.decode_binary(data, fmt)
+
+    def test_sensor_dump_cli_explicit_current_and_legacy_formats(self):
+        with tempfile.TemporaryDirectory() as directory:
+            capture = Path(directory) / 'serial.txt'
+            for fmt, width in (('interval12', 3), ('legacy16', 4)):
+                data = page(seal(start(minutes=4095, interval_nibbles=width) + [1]))
+                lines = ['FLASHDUMP BEGIN']
+                for offset in range(0, len(data), 32):
+                    lines.append(f'@0:{offset} ' + data[offset:offset + 32].hex(' '))
+                lines.append('FLASHDUMP END')
+                capture.write_text('\n'.join(lines))
+                result = subprocess.run([sys.executable, '-B', str(W.parent / 'sensor_pico/tools/decode.py'),
+                                         str(capture), '--csv', '--log-format', fmt],
+                                        capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(f'format={fmt}', result.stderr)
+                rows = list(csv.DictReader(io.StringIO(result.stdout)))
+                self.assertEqual([row['temp_c'] for row in rows], ['28.25', '28.50'])
+                self.assertEqual(int(rows[1]['unix']) - int(rows[0]['unix']), 245700)
+                self.assertTrue(all(row['status'] == 'ok' for row in rows))
+
+    def test_interval12_csv_label_cli_and_original_bytes(self):
+        data = page(seal(start(minutes=4095, interval_nibbles=3) + [1]))
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'current.bin'
+            source.write_bytes(data)
+            result = subprocess.run([sys.executable, '-B', str(W / 'tools/temperature_csv.py'),
+                                     str(source), '--log-format', 'interval12',
+                                     '--timestamp-source', 'simulated', '--diagnostic-columns'], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            with source.with_suffix('.csv').open(encoding='utf-8-sig', newline='') as stream:
+                rows = list(csv.DictReader(stream))
+            self.assertEqual([r['log_format'] for r in rows], ['interval12'] * 2)
+            self.assertEqual(int(rows[1]['unix_seconds']) - int(rows[0]['unix_seconds']), 245700)
+            self.assertEqual(source.read_bytes(), data)
+
     def test_physical_capture_temperatures_and_repeated_config_timestamps(self):
         samples, notes = exporter.decode_binary(CAPTURE)
         self.assertEqual([s['temp'] for s in samples], [28.25, 28.25])
@@ -64,20 +120,56 @@ class CsvTests(unittest.TestCase):
     def test_csv_numeric_temperatures_timezones_and_simulated_label(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / 'log.csv'
-            self.assertEqual(exporter.export_csv(CAPTURE, output, 'simulated'), 2)
+            self.assertEqual(exporter.export_csv(CAPTURE, output, 'simulated', diagnostic_columns=True), 2)
             self.assertTrue(output.read_bytes().startswith(b'\xef\xbb\xbf'))
             with output.open(encoding='utf-8-sig', newline='') as source:
                 rows = list(csv.DictReader(source))
             self.assertEqual(rows[0]['temperature_c'], '28.25')
+            self.assertEqual(rows[0]['log_format'], 'legacy16')
             self.assertEqual(rows[0]['timestamp_utc'], '2023-11-14 22:13:20')
             self.assertEqual(rows[0]['timestamp_sgt'], '2023-11-15 06:13:20')
             self.assertEqual(rows[0]['timestamp_source'], 'simulated')
             self.assertEqual(rows[1]['sample'], '2')
 
+    def test_default_csv_omits_internal_columns_without_changing_readings(self):
+        for fmt, width in (('interval12', 3), ('legacy16', 4)):
+            data = page(seal(start(minutes=1, interval_nibbles=width) + [1, 7, 2]))
+            with tempfile.TemporaryDirectory() as directory:
+                normal = Path(directory) / 'readings.csv'
+                debug = Path(directory) / 'diagnostic.csv'
+                self.assertEqual(exporter.export_csv(data, normal, 'pc-clock', log_format=fmt), 3)
+                exporter.export_csv(data, debug, 'pc-clock', log_format=fmt, diagnostic_columns=True)
+                with normal.open(encoding='utf-8-sig', newline='') as source:
+                    reader = csv.DictReader(source)
+                    self.assertEqual(reader.fieldnames, ['sample', 'temperature_c', 'timestamp_sgt', 'status'])
+                    rows = list(reader)
+                with debug.open(encoding='utf-8-sig', newline='') as source:
+                    diagnostic = list(csv.DictReader(source))
+                for row, detail in zip(rows, diagnostic):
+                    self.assertEqual(row, {key: detail[key] for key in exporter.CSV_FIELDS})
+                self.assertEqual([row['sample'] for row in rows], ['1', '2', '3'])
+                self.assertEqual(rows[-1]['temperature_c'], '')
+                self.assertEqual(rows[-1]['status'], 'SENSOR_ERR')
+                self.assertEqual([row['log_format'] for row in diagnostic], [fmt] * 3)
+                self.assertEqual(int(diagnostic[1]['unix_seconds']) - int(diagnostic[0]['unix_seconds']), 60)
+
+    def test_sample_numbers_continue_when_timebase_slot_resets(self):
+        records = start(interval_nibbles=3) + [1]
+        records += start(timestamp=1700007200, minutes=2, interval_nibbles=3)[2:]
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / 'log.csv'
+            exporter.export_csv(page(seal(records)), output, 'pc-clock', log_format='interval12')
+            with output.open(encoding='utf-8-sig', newline='') as source:
+                rows = list(csv.DictReader(source))
+            self.assertEqual([row['sample'] for row in rows], ['1', '2', '3'])
+            self.assertEqual([row['timestamp_sgt'] for row in rows],
+                             ['2023-11-15 06:13:20', '2023-11-15 07:13:20', '2023-11-15 08:13:20'])
+            self.assertNotIn('slot', rows[0])
+
     def test_sensor_error_csv_has_blank_temperature(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / 'log.csv'
-            exporter.export_csv(page(seal(start() + [7, 2])), output)
+            exporter.export_csv(page(seal(start() + [7, 2])), output, diagnostic_columns=True)
             with output.open(encoding='utf-8-sig', newline='') as source:
                 rows = list(csv.DictReader(source))
             self.assertEqual(rows[1]['temperature_c'], '')
@@ -135,16 +227,18 @@ class CsvTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(source.read_bytes(), CAPTURE)
             self.assertTrue(source.with_suffix('.csv').exists())
+            with source.with_suffix('.csv').open(encoding='utf-8-sig', newline='') as stream:
+                self.assertEqual(csv.DictReader(stream).fieldnames, list(exporter.CSV_FIELDS))
             result = subprocess.run([sys.executable, '-B', str(W / 'tools/temperature_csv.py'),
                                      str(source), '--output', str(source)], capture_output=True)
             self.assertNotEqual(result.returncode, 0)
             self.assertEqual(source.read_bytes(), CAPTURE)
 
-    @unittest.skipUnless((W / 'tests/sensor_live_logger/build/host/live-encoded-pages.bin').exists(),
+    @unittest.skipUnless((W / 'tests/sensor_live_logger/build/host/live-encoded-pages-interval12.bin').exists(),
                          'Optional fixture generated by the actual JZ C encoder host tests')
     def test_actual_c_encoder_multi_page_fixture(self):
-        fixture = W / 'tests/sensor_live_logger/build/host/live-encoded-pages.bin'
-        samples, _ = exporter.decode_binary(fixture.read_bytes())
+        fixture = W / 'tests/sensor_live_logger/build/host/live-encoded-pages-interval12.bin'
+        samples, _ = exporter.decode_binary(fixture.read_bytes(), 'interval12')
         self.assertEqual([s['temp'] for s in samples], [30, 30.25, 30.5, 31, None] + [31] * 600)
 
 

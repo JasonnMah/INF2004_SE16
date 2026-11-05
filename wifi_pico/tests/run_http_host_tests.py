@@ -4,12 +4,12 @@ import subprocess,sys
 W=Path(__file__).resolve().parents[1]
 B=W/'course/build_make/http_host';B.mkdir(parents=True,exist_ok=True)
 commands=[['gcc','-std=c11','-Wall','-Wextra','-Werror','-g','-fsanitize=address,undefined',
- '-I'+str(W/'tests/firmware'),str(W/'tests/test_network_retry.c'),'-o',str(B/'test_network_retry')],
+ '-I'+str(W),str(W/'tests/test_network_retry.c'),'-o',str(B/'test_network_retry')],
  [str(B/'test_network_retry')],['gcc','-std=c11','-Wall','-Wextra','-Werror','-g','-fsanitize=address,undefined',
- '-I'+str(W/'tests/http_mock'),'-I'+str(W/'tests/firmware'),str(W/'tests/firmware/http_post.c'),
+ '-I'+str(W/'tests/http_mock'),'-I'+str(W),str(W/'http_post.c'),
  str(W/'tests/test_http_post.c'),'-o',str(B/'test_http_post')],
  [str(B/'test_http_post')],['gcc','-std=c11','-Wall','-Wextra','-Werror','-g','-fsanitize=address,undefined',
- '-I'+str(W/'tests/http_mock'),'-I'+str(W/'tests/firmware'),str(W/'tests/firmware/http_post.c'),
+ '-I'+str(W/'tests/http_mock'),'-I'+str(W),str(W/'http_post.c'),
  str(W/'tests/http_socket_adapter.c'),'-o',str(B/'http_socket_adapter')],[sys.executable,'-B',str(W/'tests/test_temperature_csv.py')],
  [sys.executable,'-B',str(W/'tests/test_http_receiver.py')]]
 # Compile the actual application poll hook against narrow host network inputs.

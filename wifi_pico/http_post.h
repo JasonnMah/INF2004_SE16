@@ -13,6 +13,12 @@ void http_post_start_data(uint32_t now, const char *address, unsigned port,
                           const unsigned char *data, unsigned length, const char *id);
 void http_post_start(uint32_t now, const char *address, unsigned port);
 void http_post_poll(uint32_t now, unsigned network_ready);
+/* Same bounded connection/retry engine, exclusively owned by the radio task.
+ * GET /config returns a versioned interval and fresh PC Unix timestamp.
+ * Poll/result/status APIs below apply to either kind of transaction. */
+void http_config_start(uint32_t now, const char *address, unsigned port);
+unsigned http_config_minutes(void);
+uint32_t http_config_timestamp(void);
 unsigned http_post_busy(void);
 unsigned http_post_attempts(void);
 unsigned http_post_status(void);

@@ -11,7 +11,7 @@ bool live_logger_configure(live_logger_t *logger, uint32_t timestamp, uint32_t s
 {
     /* UART uses seconds; JZ's TIMEBASE stores whole minutes. Reject a value we
      * cannot represent instead of silently rounding it or changing the codec. */
-    if (!seconds || seconds % 60u || seconds / 60u > UINT16_MAX ||
+    if (!seconds || seconds % 60u || seconds / 60u > ENC_MAX_INTERVAL_MINUTES ||
         logger->full || logger->snapshot_held) return false;
     logger->timestamp = timestamp;
     logger->interval_seconds = seconds;

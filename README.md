@@ -124,8 +124,11 @@ command and output folder. No firmware reflash is needed to restart the receiver
    not needed; the current live Sensor firmware is controlled through UART.
 4. Press **Wi-Fi GP21 once** to retrieve the readings collected so far.
 5. After retrieval completes, press **Wi-Fi GP21 again** to upload the saved log.
-6. Refresh the PC webpage and download the CSV. Its columns are
-   `sample`, `temperature_c`, `timestamp_sgt` and `status`.
+6. Refresh the PC webpage and download files such as `Download_temp_2026-11-05_1.csv`.
+   The date is when the PC first received the log, in Singapore time. The existing
+   sequence continues across dates and receiver restarts in the same output folder;
+   retries and repeat downloads keep the same name. Columns remain `sample`,
+   `temperature_c`, `timestamp_sgt` and `status`.
 
 GP21 retrieves stored readings; it does not trigger a new measurement.
 Readings collected after that snapshot appear in the next retrieval/upload.

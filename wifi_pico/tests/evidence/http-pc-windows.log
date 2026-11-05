@@ -1,0 +1,25 @@
+[PC] stored: ID=pico-known-1024-v1 bytes=1024 sha256=785b0751fc2c53dc14a4ce3d800e69ef9ce1009eb327ccf458afe09c242c26c9
+[PC] duplicate: ID=pico-known-1024-v1 bytes=1024 sha256=785b0751fc2c53dc14a4ce3d800e69ef9ce1009eb327ccf458afe09c242c26c9
+[PC] duplicate: ID=pico-known-1024-v1 bytes=1024 sha256=785b0751fc2c53dc14a4ce3d800e69ef9ce1009eb327ccf458afe09c242c26c9
+test_binary_retry_and_persistent_dedup (__main__.ReceiverTests.test_binary_retry_and_persistent_dedup) ... ok
+[PC] stored: ID=pico-known-1024-v1 bytes=1024 sha256=785b0751fc2c53dc14a4ce3d800e69ef9ce1009eb327ccf458afe09c242c26c9
+[PC] duplicate: ID=pico-known-1024-v1 bytes=1024 sha256=785b0751fc2c53dc14a4ce3d800e69ef9ce1009eb327ccf458afe09c242c26c9
+[PC] duplicate: ID=pico-known-1024-v1 bytes=1024 sha256=785b0751fc2c53dc14a4ce3d800e69ef9ce1009eb327ccf458afe09c242c26c9
+[PC] duplicate: ID=pico-known-1024-v1 bytes=1024 sha256=785b0751fc2c53dc14a4ce3d800e69ef9ce1009eb327ccf458afe09c242c26c9
+test_concurrent_retries (__main__.ReceiverTests.test_concurrent_retries) ... ok
+test_invalid_requests (__main__.ReceiverTests.test_invalid_requests) ... ok
+[PC] stored: ID=pico-known-1024-v1 bytes=1024 sha256=785b0751fc2c53dc14a4ce3d800e69ef9ce1009eb327ccf458afe09c242c26c9
+test_key_collision_different_bytes (__main__.ReceiverTests.test_key_collision_different_bytes) ... ok
+[PC] FAIL: known-byte comparison mismatch
+[PC] stored: ID=pico-known-1024-v1 bytes=1024 sha256=785b0751fc2c53dc14a4ce3d800e69ef9ce1009eb327ccf458afe09c242c26c9 known-byte comparison=PASS
+test_known_comparison (__main__.ReceiverTests.test_known_comparison) ... ok
+[PC] stored: ID=pico-known-1024-v1 bytes=1024 sha256=785b0751fc2c53dc14a4ce3d800e69ef9ce1009eb327ccf458afe09c242c26c9
+[PC] duplicate: ID=pico-known-1024-v1 bytes=1024 sha256=785b0751fc2c53dc14a4ce3d800e69ef9ce1009eb327ccf458afe09c242c26c9
+test_lost_reply_after_storage (__main__.ReceiverTests.test_lost_reply_after_storage) ... ok
+test_real_client_over_host_tcp (__main__.ReceiverTests.test_real_client_over_host_tcp) ... skipped 'C socket adapter runs in WSL; PC receiver tests still run on Windows'
+test_truncated_body_and_duplicate_length (__main__.ReceiverTests.test_truncated_body_and_duplicate_length) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 4.197s
+
+OK (skipped=1)

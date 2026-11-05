@@ -4,11 +4,19 @@
 #include <string.h>
 #include "app.h"
 #include "upload.h"
+#include "pc_config.h"
 #include "http_post.h"
 static upload_job_t queued;
 static unsigned waiting,started,busy,returned;
 static int done;
+static unsigned config_waiting,config_requests,config_returned;
+static pc_config_result_t config_result;
 static const unsigned char bytes[]={0,0x7d,0x7e,0xff};
+int rt_config_request_take(unsigned *token) { if(!config_waiting)return 0;config_waiting=0;*token=17;return 1; }
+void rt_config_result_send(const pc_config_result_t *r) { config_result=*r;config_returned++; }
+void http_config_start(uint32_t t,const char *ip,unsigned port) { (void)t;assert(!busy&&!strcmp(ip,"127.0.0.1")&&port==8000);busy=1;config_requests++; }
+unsigned http_config_minutes(void) { return 4095; }
+uint32_t http_config_timestamp(void) { return 1793491200u; }
 int rt_upload_take(upload_job_t *j) { if(!waiting)return 0;*j=queued;waiting=0;return 1; }
 void rt_upload_result_send(int r) { assert(r==1||r==-1);returned++; }
 unsigned long long rt_now_ms(void) { return 1000; }
@@ -31,5 +39,12 @@ int main(void) {
  done=-1;upload_poll(1);assert(returned==2&&!busy);
  waiting=1;upload_poll(1);assert(started==2&&busy);
  done=1;upload_poll(1);assert(returned==3&&!busy);
+ config_waiting=1;upload_poll(0);assert(config_returned==1&&!config_requests&&config_result.result==-1);
+ config_waiting=1;upload_poll(1);assert(config_requests==1&&busy);
+ waiting=1;upload_poll(1);assert(waiting&&started==2); /* Fetch and upload never overlap. */
+ done=1;upload_poll(1);assert(config_returned==2&&config_result.token==17&&config_result.result==1);
+ assert(config_result.interval_minutes==4095&&config_result.unix_seconds==1793491200u);
+ upload_poll(1);assert(started==3&&busy&&!waiting);done=1;upload_poll(1);assert(!busy);
+ puts("PASS PC configuration radio handoff: offline error, copied token/values and exclusive HTTP ownership");
  puts("PASS radio handoff: offline returns ownership, exact pointer/length/ID, completion once, retry accepts same job");
 }

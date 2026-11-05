@@ -14,7 +14,7 @@
 [P1] Transfer timeout: retry limit reached
 [P2] Receive timeout: no transfer progress
 [UI] Data retrieval failed
-[RX] received_log_valid=0 received_bytes=0
+[RX] received_log_valid=0 received_bytes=0 completion_count=0
 [UI] Requesting stored data
 [P2] REQUEST_DATA acknowledged
 [P2] DATA block received and ACKed

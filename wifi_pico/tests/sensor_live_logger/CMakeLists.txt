@@ -5,17 +5,14 @@ include("${REPOSITORY}/uart_protocol/pico_sdk_import.cmake")
 project(sensor_live_logger C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 pico_sdk_init()
-set(SHARED "${REPOSITORY}/shared/uart_protocol/src")
+add_subdirectory("${REPOSITORY}/shared/uart_protocol" shared_uart)
 set(JZ "${REPOSITORY}/sensor_pico")
 # Read-only reuse; neither JZ's main/flash code nor the frozen reference is compiled.
 set(LIVE_SENSOR_SOURCES
-    main.c live_logger.c "${JZ}/aht10.c" "${JZ}/encoder.c"
-    "${SHARED}/protocol/crc16.c" "${SHARED}/protocol/frame.c"
-    "${SHARED}/protocol/stream_parser.c" "${SHARED}/protocol/reliability.c"
-    "${SHARED}/pico1/pico1_protocol.c")
+    main.c live_logger.c "${JZ}/aht10.c" "${JZ}/encoder.c")
 add_executable(sensor_live_logger ${LIVE_SENSOR_SOURCES})
-target_include_directories(sensor_live_logger PRIVATE "${JZ}" "${SHARED}")
-target_link_libraries(sensor_live_logger pico_stdlib hardware_uart hardware_i2c hardware_irq hardware_sync)
+target_include_directories(sensor_live_logger PRIVATE "${JZ}")
+target_link_libraries(sensor_live_logger uart::sensor pico_stdlib hardware_uart hardware_i2c hardware_irq hardware_sync)
 target_compile_options(sensor_live_logger PRIVATE -Wall -Wextra)
 set_source_files_properties(main.c live_logger.c PROPERTIES COMPILE_OPTIONS -Werror)
 # A disconnected or stalled USB reader must not stall UART processing for 500 ms.
@@ -26,8 +23,8 @@ pico_add_extra_outputs(sensor_live_logger)
 
 # Separately named image: original live-RAM firmware remains available unchanged.
 add_executable(sensor_live_logger_i2c_diag ${LIVE_SENSOR_SOURCES} i2c_diag.c)
-target_include_directories(sensor_live_logger_i2c_diag PRIVATE "${JZ}" "${SHARED}")
-target_link_libraries(sensor_live_logger_i2c_diag pico_stdlib hardware_uart hardware_i2c hardware_irq hardware_sync)
+target_include_directories(sensor_live_logger_i2c_diag PRIVATE "${JZ}")
+target_link_libraries(sensor_live_logger_i2c_diag uart::sensor pico_stdlib hardware_uart hardware_i2c hardware_irq hardware_sync)
 target_compile_options(sensor_live_logger_i2c_diag PRIVATE -Wall -Wextra)
 set_source_files_properties(i2c_diag.c PROPERTIES COMPILE_OPTIONS -Werror)
 target_compile_definitions(sensor_live_logger_i2c_diag PRIVATE

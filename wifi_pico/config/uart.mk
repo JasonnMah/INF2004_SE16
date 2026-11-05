@@ -37,7 +37,7 @@ CFLAGS += -DAPP_SENSOR_EMULATOR=$(APP_SENSOR_EMULATOR) -DAPP_VERBOSE_DIAGNOSTICS
  -I../.. -I../../tests/firmware -I../../../shared/uart_protocol/src -I../../../uart_protocol/src
 OBJS := $(filter-out ./mtkernel_3/app_program/%,$(OBJS))
 C_DEPS := $(filter-out ./mtkernel_3/app_program/%,$(C_DEPS))
-PROJECT_SRCS := main.c communication.c lab_capture.c uart_io.c rx_ring.c buttons.c ui.c status.c kernel_io.c
+PROJECT_SRCS := tests/firmware/uart_main.c communication.c lab_capture.c uart_io.c rx_ring.c buttons.c ui.c status.c kernel_io.c
 ifeq ($(APP_SENSOR_EMULATOR),1)
 PROJECT_SRCS := $(filter-out lab_capture.c,$(PROJECT_SRCS))
 PROJECT_SRCS += tests/firmware/sensor_emulator.c tests/firmware/fault_injection.c
@@ -45,25 +45,25 @@ else ifneq ($(UART_FAULT),0)
 PROJECT_SRCS += tests/firmware/fault_injection.c
 endif
 PROJECT_OBJS := $(addprefix ./mtkernel_3/uart/,$(PROJECT_SRCS:.c=.o))
-SHARED_SRCS := protocol/crc16.c protocol/frame.c protocol/stream_parser.c protocol/reliability.c pico2/pico2_protocol.c
-BASELINE_SRCS :=
+UART_PROTOCOL_ROOT := ../../../shared/uart_protocol
+UART_LIBRARY_DIR := ./mtkernel_3/uart_shared
+UART_ENDPOINTS := gateway
 ifeq ($(APP_SENSOR_EMULATOR),1)
-SHARED_SRCS += pico1/pico1_protocol.c
-BASELINE_SRCS := demo/mock_logger.c
+UART_ENDPOINTS += sensor
+BASELINE_OBJ := ./mtkernel_3/uart_baseline/demo/mock_logger.o
+OBJS += $(BASELINE_OBJ)
+C_DEPS += $(BASELINE_OBJ:.o=.d)
+$(BASELINE_OBJ): ../../../uart_protocol/src/demo/mock_logger.c
+	@mkdir -p "$(@D)"
+	$(GCC) $(CFLAGS) -Wall -Wextra -Werror -D$(TARGET) $(INCPATH) -MF"$(@:%.o=%.d)" -MT"$(@)" -c -o "$@" "$<"
 endif
-SHARED_OBJS := $(addprefix ./mtkernel_3/uart_shared/,$(SHARED_SRCS:.c=.o))
-BASELINE_OBJS := $(addprefix ./mtkernel_3/uart_baseline/,$(BASELINE_SRCS:.c=.o))
-OBJS += $(PROJECT_OBJS) $(SHARED_OBJS) $(BASELINE_OBJS)
-C_DEPS += $(PROJECT_OBJS:.o=.d) $(SHARED_OBJS:.o=.d) $(BASELINE_OBJS:.o=.d)
+OBJS += $(PROJECT_OBJS)
+C_DEPS += $(PROJECT_OBJS:.o=.d)
 mtkernel_3/uart/%.o: ../../%.c
 	@mkdir -p "$(@D)"
 	$(GCC) $(CFLAGS) -Wall -Wextra -Werror -D$(TARGET) $(INCPATH) -MF"$(@:%.o=%.d)" -MT"$(@)" -c -o "$@" "$<"
-mtkernel_3/uart_shared/%.o: ../../../shared/uart_protocol/src/%.c
-	@mkdir -p "$(@D)"
-	$(GCC) $(CFLAGS) -Wall -Wextra -Werror -D$(TARGET) $(INCPATH) -MF"$(@:%.o=%.d)" -MT"$(@)" -c -o "$@" "$<"
-mtkernel_3/uart_baseline/%.o: ../../../uart_protocol/src/%.c
-	@mkdir -p "$(@D)"
-	$(GCC) $(CFLAGS) -Wall -Wextra -Werror -D$(TARGET) $(INCPATH) -MF"$(@:%.o=%.d)" -MT"$(@)" -c -o "$@" "$<"
+include $(UART_PROTOCOL_ROOT)/library.mk
+
 .PHONY: uart-config
 uart-config:
 	@echo 'PROFILE: TARGET=$(TARGET) SMP=$(SMP) CONSOLE=$(CONSOLE) UART_FAULT=$(UART_FAULT) SENSOR_EMULATOR=$(APP_SENSOR_EMULATOR) DIAGNOSTICS=$(APP_VERBOSE_DIAGNOSTICS) WIFI=$(WIFI)'
