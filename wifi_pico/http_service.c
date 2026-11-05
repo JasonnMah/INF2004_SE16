@@ -34,7 +34,7 @@ void cyw43_utk_app_scan(const cyw43_ev_scan_result_t *result)
     }
 }
 static volatile unsigned enabled;
-void http_test_enable(void) { mp_memory_barrir(); enabled = 1; }
+void http_service_enable(void) { mp_memory_barrir(); enabled = 1; }
 
 int cyw43_utk_app_poll(struct netif *netif)
 {

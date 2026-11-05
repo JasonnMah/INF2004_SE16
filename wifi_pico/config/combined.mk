@@ -18,7 +18,7 @@ CFLAGS += -DAPP_COMBINED=1 -DTM_APP_HTTP=1 -DHTTP_BUILD_CHECK=$(HTTP_BUILD_CHECK
  -I. -I../.. -I../../tests/firmware -I../../../shared/uart_protocol/src
 OBJS := $(filter-out ./mtkernel_3/app_program/%,$(OBJS))
 C_DEPS := $(filter-out ./mtkernel_3/app_program/%,$(C_DEPS))
-HTTP_SRCS := combined_main.c tests/firmware/http_post.c tests/firmware/http_test.c \
+HTTP_SRCS := main.c http_post.c http_service.c \
  kernel_io.c rx_ring.c buttons.c status.c ui.c communication.c uart_io.c lab_capture.c upload.c log_workflow.c log_id.c
 HTTP_OBJS := $(addprefix ./mtkernel_3/http_app/,$(HTTP_SRCS:.c=.o))
 OBJS += $(HTTP_OBJS)
@@ -32,10 +32,7 @@ http-config:
 	@echo 'CFLAGS=$(CFLAGS)'
 	@echo 'ASFLAGS=$(ASFLAGS)'
 
-SHARED_SRCS := protocol/crc16.c protocol/frame.c protocol/stream_parser.c protocol/reliability.c pico2/pico2_protocol.c
-SHARED_OBJS := $(addprefix ./mtkernel_3/combined_shared/,$(SHARED_SRCS:.c=.o))
-OBJS += $(SHARED_OBJS)
-C_DEPS += $(SHARED_OBJS:.o=.d)
-mtkernel_3/combined_shared/%.o: ../../../shared/uart_protocol/src/%.c
-	@mkdir -p "$(@D)"
-	$(GCC) $(CFLAGS) -Wall -Wextra -Werror -D$(TARGET) $(INCPATH) -MF"$(@:%.o=%.d)" -MT"$(@)" -c -o "$@" "$<"
+UART_PROTOCOL_ROOT := ../../../shared/uart_protocol
+UART_LIBRARY_DIR := ./mtkernel_3/combined_shared
+UART_ENDPOINTS := gateway
+include $(UART_PROTOCOL_ROOT)/library.mk

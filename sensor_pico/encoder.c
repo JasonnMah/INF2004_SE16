@@ -66,8 +66,8 @@ static uint8_t delta_nibble(int d) {
 
 enc_result_t enc_put_start(enc_t *e, int16_t t_centi, uint32_t unix_time,
                            uint16_t interval_min, bool boot) {
-    if (interval_min == 0) return ENC_BAD_ARG;
-    unsigned len = (boot ? 2u : 0u) + 18u;        /* [7 3] 7 1, 8 time, 4 interval, 8 q(3) */
+    if (interval_min == 0 || interval_min > ENC_MAX_INTERVAL_MINUTES) return ENC_BAD_ARG;
+    unsigned len = (boot ? 2u : 0u) + 2u + 8u + ENC_INTERVAL_NIBBLES + 4u;
     if (!fits(e, len)) return ENC_NO_ROOM;
 
     int16_t q = enc_temp_to_q(t_centi);
@@ -75,7 +75,7 @@ enc_result_t enc_put_start(enc_t *e, int16_t t_centi, uint32_t unix_time,
     put_nib(e, NIB_META);
     put_nib(e, META_TIMEBASE);
     put_field(e, unix_time, 8);
-    put_field(e, interval_min, 4);
+    put_field(e, interval_min, ENC_INTERVAL_NIBBLES);
     put_nib(e, NIB_ESCAPE);
     put_field(e, (uint32_t)q, 3);
     e->last_q = q;

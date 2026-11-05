@@ -1,5 +1,10 @@
 #include "app.h"
 #include "uart_io.h"
+#if APP_COMBINED
+#include <string.h>
+_Static_assert(APP_UART_PREAMBLE_BYTE != SOF && APP_UART_PREAMBLE_BYTE != ESCAPE,
+               "Preamble must not introduce frame delimiters/escapes");
+#endif
 unsigned protocol_receive(unsigned unit, stream_parser_t *parser,
                           void (*handle)(const protocol_frame_t *))
 {
@@ -37,6 +42,23 @@ static void write_bytes(void *context, const uint8_t *bytes, size_t length)
     unsigned unit = *(unsigned *)context;
 #if APP_FAULT_INJECTION
     if (fault_drop_tx(unit, bytes, length)) { return; }
+#endif
+#if APP_COMBINED
+    if (unit == 0) {
+        /* Prefix the original stuffed frame unchanged, including ACKs/NACKs and
+         * retries. An awake peer ignores the prefix while waiting for SOF.
+         * One bounded write keeps prefix/frame ordering under this UART owner;
+         * no sleep, artificial gap or protocol retry/timeout change is added. */
+        uint8_t wire[APP_UART_PREAMBLE_LENGTH + MAX_STUFFED_FRAME_SIZE];
+        if (length > MAX_STUFFED_FRAME_SIZE) {
+            rt_fatal("UART frame exceeds transport capacity", -1);
+            return;
+        }
+        memset(wire, APP_UART_PREAMBLE_BYTE, APP_UART_PREAMBLE_LENGTH);
+        memcpy(wire + APP_UART_PREAMBLE_LENGTH, bytes, length);
+        rt_uart_write(unit, wire, (unsigned)(APP_UART_PREAMBLE_LENGTH + length));
+        return;
+    }
 #endif
     rt_uart_write(unit, bytes, (unsigned)length);
 }

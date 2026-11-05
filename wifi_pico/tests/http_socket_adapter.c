@@ -50,8 +50,9 @@ int ipaddr_aton(const char *s,ip_addr_t *ip) { return inet_pton(AF_INET,s,&ip->u
 static uint32_t clock_ms(void) { struct timespec t;clock_gettime(CLOCK_MONOTONIC,&t);return (uint32_t)((uint64_t)t.tv_sec*1000+t.tv_nsec/1000000); }
 int main(int argc,char **argv) {
  static unsigned char body[65536];
- assert(argc==2||argc==4);
- if(argc==4) {
+ assert(argc==2||argc==3||argc==4);
+ if(argc==3) { assert(!strcmp(argv[2],"config"));http_config_start(clock_ms(),"127.0.0.1",(unsigned)atoi(argv[1])); }
+ else if(argc==4) {
   FILE *f=fopen(argv[2],"rb");assert(f);unsigned n=(unsigned)fread(body,1,sizeof(body),f);assert(feof(f));fclose(f);
   http_post_start_data(clock_ms(),"127.0.0.1",(unsigned)atoi(argv[1]),body,n,argv[3]);
  } else http_post_start(clock_ms(),"127.0.0.1",(unsigned)atoi(argv[1]));
@@ -71,5 +72,6 @@ int main(int argc,char **argv) {
   struct timespec wait={0,1000000};nanosleep(&wait,NULL);
  }
  int result=http_post_result();printf("HOST HTTP result=%d status=%u attempts=%u reason=%s\n",result,http_post_status(),http_post_attempts(),http_post_reason());
+ if(argc==3&&result==1)printf("HOST CONFIG minutes=%u timestamp=%u\n",http_config_minutes(),http_config_timestamp());
  return result==1?0:1;
 }

@@ -12,7 +12,7 @@
 
 [P2] Command timeout: retry limit reached
 [UI] CONFIG failed
-[RX] received_log_valid=0 received_bytes=0
+[RX] received_log_valid=0 received_bytes=0 completion_count=0
 [UI] Sending CONFIG
 [P2] CONFIG acknowledged
 [UI] CONFIG acknowledged

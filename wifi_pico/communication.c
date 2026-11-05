@@ -10,6 +10,8 @@
 #include <string.h>
 #if APP_COMBINED
 #include "upload.h"
+#include "pc_config.h"
+static unsigned config_fetching, config_token;
 #endif
 
 static pico2_ctx_t p2;
@@ -19,7 +21,7 @@ static unsigned operation, configured, completions;
 #if APP_SENSOR_EMULATOR
 static bool expected_empty;
 #endif
-static unsigned long long indication_until;
+static unsigned long long indication_until, next_activity_status;
 
 #if APP_SENSOR_EMULATOR
 static bool check_test_log(const uint8_t *bytes, size_t length)
@@ -72,13 +74,14 @@ void communication_init(void)
     operation = configured = completions = 0;
 #if APP_COMBINED
     log_workflow_init();
+    config_fetching = config_token = 0;
 #endif
 #if APP_SENSOR_EMULATOR
     expected_empty = false;
 #else
     lab_capture_cancel();
 #endif
-    indication_until = 0;
+    indication_until = next_activity_status = 0;
     stream_parser_init(&parser);
     if (!pico2_init(&p2, app_protocol_link(0),
                     received, sizeof(received), 1700000000u, 3600u,
@@ -141,9 +144,40 @@ static void update_result(void)
         operation = 0;
     }
 }
+#if APP_COMBINED
+static void pc_configuration_result(void)
+{
+    pc_config_result_t result;
+    if (!rt_config_result_take(&result)) return;
+    if (!config_fetching || result.token != config_token) {
+        rt_log("[CONFIG] Stale PC result ignored\n");
+        return;
+    }
+    config_fetching = 0;
+    if (result.result <= 0 || result.interval_minutes < 1 ||
+        result.interval_minutes > 4095 || !result.unix_seconds) {
+        rt_log("[UI] CONFIG not sent: PC settings unavailable or invalid. Save an interval on the PC, then retry GP20\n");
+        indicate(APP_STATUS_FAILED);
+        return;
+    }
+    p2.config_interval = result.interval_minutes * 60u;
+    p2.config_timestamp = result.unix_seconds;
+    rt_numbers("[CONFIG] PC interval=%u minutes (%u seconds); timestamp=%u\n",
+               result.interval_minutes, p2.config_interval, p2.config_timestamp);
+    rt_log("[UI] Sending CONFIG\n");
+    if (pico2_send_config(&p2)) operation = APP_CONFIG;
+    else {
+        rt_log("[UI] Command could not be started\n");
+        indicate(APP_STATUS_FAILED);
+    }
+}
+#endif
 static void command(const app_message_t *message)
 {
     if (operation || message->at_ms < indication_until
+#if APP_COMBINED
+        || config_fetching
+#endif
 #if !APP_SENSOR_EMULATOR
         || lab_capture_active()
 #endif
@@ -156,8 +190,20 @@ static void command(const app_message_t *message)
 #endif
     bool sent = false;
     if (message->kind == APP_CONFIG) {
+#if APP_COMBINED
+        if (++config_token == 0) ++config_token;
+        if (!rt_config_request_send(config_token)) {
+            rt_log("[UI] PC configuration queue busy; retry GP20\n");
+            indicate(APP_STATUS_FAILED);
+            return;
+        }
+        config_fetching = 1;
+        rt_log("[UI] Reading interval and time from PC\n");
+        return;
+#else
         rt_log("[UI] Sending CONFIG\n");
         sent = pico2_send_config(&p2);
+#endif
     } else if (!configured) {
         rt_log("[UI] Configure first using GP20\n");
         return;
@@ -178,6 +224,27 @@ static void command(const app_message_t *message)
         indicate(APP_STATUS_FAILED);
     }
 }
+static void activity_status(void)
+{
+    unsigned kind = APP_STATUS_TRANSFERRING;
+    unsigned active = operation == APP_RETRIEVE;
+#if APP_COMBINED
+    active |= log_workflow_state() == 2; /* Queued/in-progress HTTP upload. */
+    if (config_fetching || operation == APP_CONFIG) {
+        active = 1;
+        kind = APP_STATUS_LOADING; /* Silent, slower blink through fetch and UART retries. */
+    }
+#endif
+    if (!active) {
+        next_activity_status = 0;
+        return;
+    }
+    unsigned long long now = rt_now_ms();
+    if (now < next_activity_status) return;
+    app_message_t message = {.kind = kind, .at_ms = now};
+    if (!rt_status_send(&message)) rt_log("[STATUS] Queue full; activity indication dropped\n");
+    next_activity_status = now + APP_TRANSFER_HEARTBEAT_MS;
+}
 void communication_step(void)
 {
     unsigned fault = protocol_receive(0, &parser, handle_frame);
@@ -192,6 +259,7 @@ void communication_step(void)
     update_result();
 #if APP_COMBINED
     log_workflow_poll();
+    pc_configuration_result();
 #endif
 #if !APP_SENSOR_EMULATOR
     /* One bounded diagnostic line per poll; keep servicing RX/retries. */
@@ -202,6 +270,7 @@ void communication_step(void)
         if (!rt_command_take(&message)) { break; }
         command(&message);
     }
+    activity_status();
 }
 void communication_run(void)
 {

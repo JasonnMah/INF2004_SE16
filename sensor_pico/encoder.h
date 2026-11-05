@@ -6,7 +6,7 @@
  * Nibble codes:  0x0-0x6 delta +0..+6 steps      0x9-0xE delta -1..-6 steps (0x8 | magnitude)
  *                0x7 metadata prefix             0x8 escape, followed by a 3-nibble anchor q
  *                0xF empty / end of data
- * Metadata:      7 1 TIMEBASE (32-bit UTC, 16-bit interval in minutes; always followed by an anchor)
+ * Metadata:      7 1 TIMEBASE (32-bit UTC, 12-bit interval in minutes; always followed by an anchor)
  *                7 2 SENSOR_ERR    7 3 BOOT    7 4 CHECK (CRC-16 over the nibbles since the last CHECK)
  * q = (T + 40 C) / 0.25 C, clamped to 0..500. Nibbles are packed high nibble first.
  *
@@ -23,12 +23,14 @@
 #define ENC_PAGE_BYTES    256u
 #define ENC_PAGE_NIBBLES  (ENC_PAGE_BYTES * 2u)
 #define ENC_CHECK_NIBBLES 6u          /* 7, 4 and a 4-nibble CRC: always kept in reserve */
+#define ENC_INTERVAL_NIBBLES 3u
+#define ENC_MAX_INTERVAL_MINUTES 4095u
 #define ENC_MAX_DELTA     6
 
 typedef enum {
     ENC_OK = 0,
     ENC_NO_ROOM,                      /* does not fit in this page */
-    ENC_BAD_ARG                       /* e.g. interval of 0 minutes */
+    ENC_BAD_ARG                       /* interval must be 1..4095 whole minutes */
 } enc_result_t;
 
 typedef struct {
@@ -45,7 +47,8 @@ void enc_reset_page(enc_t *e);
 /* Temperature in 0.01 C to q (0.25 C steps from -40 C). */
 int16_t enc_temp_to_q(int16_t t_centi);
 
-/* [BOOT] + TIMEBASE + anchor for the sample taken now. */
+/* [BOOT] + TIMEBASE + anchor for the sample taken now.
+ * New pages use a 3-nibble interval. Do not append them to legacy 4-nibble logs. */
 enc_result_t enc_put_start(enc_t *e, int16_t t_centi, uint32_t unix_time,
                            uint16_t interval_min, bool boot);
 

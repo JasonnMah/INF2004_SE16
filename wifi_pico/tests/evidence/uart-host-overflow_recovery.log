@@ -4,7 +4,7 @@
 [UI] Requesting stored data
 [UART0] RX/TX loss fault=1; partial log discarded
 [UI] Data retrieval failed
-[RX] received_log_valid=0 received_bytes=0
+[RX] received_log_valid=0 received_bytes=0 completion_count=0
 
 [P1] Transfer timeout: retransmitted pending frame
 

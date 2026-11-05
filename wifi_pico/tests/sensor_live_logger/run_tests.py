@@ -17,7 +17,7 @@ sources = [here / "test_live_logger.c", here / "live_logger.c", sensor / "encode
            shared / "pico1/pico1_protocol.c", shared / "pico2/pico2_protocol.c"]
 executable = out / "live_logger_tests"
 subprocess.run([*flags, *map(str, sources), "-o", str(executable)], check=True)
-fixture = out / "live-encoded-pages.bin"
+fixture = out / "live-encoded-pages-interval12.bin"
 subprocess.run([str(executable), str(fixture)], check=True)
 spec = importlib.util.spec_from_file_location("jz_decoder", sensor / "tools/decode.py")
 decoder = importlib.util.module_from_spec(spec)

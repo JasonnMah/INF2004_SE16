@@ -44,6 +44,22 @@ static void reply(const char *s) { /* One byte per pbuf, including delimiters. *
 }
 static const char good[]="HTTP/1.1 201 Created\r\ncontent-length: 0\r\nx-log-id: " HTTP_TEST_ID "\r\nX-Log-Length: 1024\r\nX-Log-Result: stored\r\n\r\n";
 static void finish_failed(void) { for(unsigned i=0;i<1000&&http_post_busy();++i)tick(100,1);assert(!http_post_busy());assert(http_post_result()==-1);assert(!live); }
+static void begin_config(void) {
+    assert(!http_post_busy());
+    http_config_start(now,"192.168.1.2",8000);
+    assert(http_post_busy());
+}
+static void send_config_request(void) {
+    connected();for(unsigned i=0;i<100;++i)tick(1,1);
+    assert(!strncmp(sent,"GET /config HTTP/1.1\r\n",22));
+    char *end=strstr(sent,"\r\n\r\n");assert(end);
+    assert(sent_length==(unsigned)(end+4-sent));
+}
+static void config_reply(const char *minutes,const char *timestamp) {
+    char text[512];
+    snprintf(text,sizeof(text),"HTTP/1.1 200 OK\r\nContent-Length: 0\r\nX-Config-Version: 1\r\nX-Config-Minutes: %s\r\nX-Config-Unix-Seconds: %s\r\n\r\n",minutes,timestamp);
+    reply(text);
+}
 int main(void)
 {
  begin();send_request();reply(good);assert(http_post_result()==1);assert(http_post_result()==0);assert(!live);
@@ -88,5 +104,39 @@ int main(void)
  assert(http_post_result()==1);
  http_post_start_data(now,"192.168.1.2",8000,raw,sizeof(raw),"bad\r\nheader");assert(http_post_result()==-1&&!http_post_busy());
  puts("PASS generic binary body, mismatched receipt length, empty body and invalid ID rejection");
+ const char *minutes[]={"1","4095"};
+ for(unsigned i=0;i<2;++i) {
+  begin_config();send_config_request();config_reply(minutes[i],"4294967295");
+  assert(http_post_result()==1&&!http_post_busy()&&!live);
+  assert(http_config_minutes()==(i?4095u:1u)&&http_config_timestamp()==UINT32_MAX);
+ }
+ const char *bad_minutes[]={"0","4096","-1","1.5","+1","","4294967296"};
+ for(unsigned i=0;i<sizeof(bad_minutes)/sizeof(bad_minutes[0]);++i) {
+  begin_config();send_config_request();config_reply(bad_minutes[i],"1700000000");
+  finish_failed();assert(http_post_attempts()==1);
+ }
+ const char *bad_time[]={"0","-1","4294967296","1700000000x",""};
+ for(unsigned i=0;i<sizeof(bad_time)/sizeof(bad_time[0]);++i) {
+  begin_config();send_config_request();config_reply("60",bad_time[i]);finish_failed();
+  assert(http_post_attempts()==1);
+ }
+ const char *bad_config[]={
+  "HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n",
+  "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nX-Config-Version: 2\r\n\r\n",
+  "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nX-Config-Version: 1\r\nX-Config-Minutes: 1\r\nx-config-minutes: 2\r\nX-Config-Unix-Seconds: 1700000000\r\n\r\n",
+  "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n",
+  "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n",
+  "HTTP/1.1 201 Created\r\nContent-Length: 0\r\n\r\n"};
+ for(unsigned i=0;i<sizeof(bad_config)/sizeof(bad_config[0]);++i) {
+  begin_config();send_config_request();reply(bad_config[i]);finish_failed();assert(http_post_attempts()==1);
+ }
+ begin_config();send_config_request();reply("HTTP/1.1 503 Unavailable\r\nContent-Length: 0\r\n\r\n");
+ tick(1000,1);assert(http_post_attempts()==2);send_config_request();config_reply("2","1700000001");
+ assert(http_post_result()==1&&http_config_minutes()==2&&http_config_timestamp()==1700000001u);
+ begin_config();finish_failed();assert(http_post_attempts()==3);
+ begin_config();http_post_start(now,"192.168.1.2",8000);send_config_request();config_reply("1","1700000000");
+ assert(http_post_result()==1); /* Busy POST cannot replace an in-flight GET. */
+ begin();send_request();reply(good);assert(http_post_result()==1); /* GET cannot leak into POST. */
+ puts("PASS PC configuration GET: fragmented headers, 1/4095 bounds, timestamp overflow, framing, retries, no defaults and POST isolation");
  puts("HTTP client host tests PASS (no hardware/network claim)");return 0;
 }

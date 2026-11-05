@@ -6,7 +6,7 @@ W=Path(__file__).resolve().parents[1];R=W.parent;B=W/'course/build_make'
 check_only=int(sys.argv[1]);combined=len(sys.argv)>2 and sys.argv[2]=='combined'
 image=('wifi_pico_combined' if combined else 'wifi_pico_http_known_bytes')+('_buildcheck' if check_only else '')
 profile=f'inf2004-combined-smp1-check{check_only}-v1' if combined else f'inf2004-http-known-smp1-check{check_only}-v2'
-entry='../../combined_main.c' if combined else '../../tests/firmware/http_test_main.c'
+entry='../../main.c' if combined else '../../tests/firmware/http_test_main.c'
 def check(ok,why):
  if not ok:raise SystemExit('FAIL: '+why)
 def source_hash(p,mode='text-lf'):
@@ -26,10 +26,10 @@ def run(args):return subprocess.check_output(args,cwd=B,text=True)
 macros=dict(re.findall(r'^#define (\w+) (.*)$',run([*cmd,'-dM','-E',entry]),re.M))
 for k,v in {'CNF_SMP':'1','TK_MAX_CORE':'2','TM_APP_HTTP':'1','TM_CONSOLE_UART':'0','TM_CONSOLE_USB_CDC':'1','TM_WIFI_CYW43':'1','TM_WIFI_DHCP':'1','TM_WIFI_TCP':'0','APP_SENSOR_EMULATOR':'0'}.items():check(macros.get(k)==v,'Effective macro '+k)
 # Check the actual TCP feature in a standard-C unit too.
-rawmacros=dict(re.findall(r'^#define (\w+) (.*)$',run([*cmd,'-dM','-E','../../tests/firmware/http_post.c']),re.M))
+rawmacros=dict(re.findall(r'^#define (\w+) (.*)$',run([*cmd,'-dM','-E','../../http_post.c']),re.M))
 check(rawmacros.get('LWIP_TCP')=='(TM_WIFI_TCP || TM_APP_HTTP)','TCP enabled without echo test')
 check(rawmacros.get('NO_SYS')=='1' and rawmacros.get('SYS_LIGHTWEIGHT_PROT')=='0','Expected owner model')
-retry_macros=dict(re.findall(r'^#define (\w+) (.*)$',run([*cmd,'-dM','-E','../../tests/firmware/http_test.c']),re.M))
+retry_macros=dict(re.findall(r'^#define (\w+) (.*)$',run([*cmd,'-dM','-E','../../http_service.c']),re.M))
 check(retry_macros.get('WIFI_JOIN_MAX_ATTEMPTS')=='3u' and retry_macros.get('WIFI_JOIN_RETRY_GAP_MS')=='2000u','Bounded startup join policy')
 check(retry_macros.get('WIFI_JOIN_WINDOW_US')=='30000000ULL' and retry_macros.get('WIFI_JOIN_NONET_RETRY_US')=='1000000ULL','NONET deadline/pacing')
 symbols=run(['arm-none-eabi-nm',image+'.elf'])
@@ -40,8 +40,11 @@ if not check_only:
 for symbol in ['snprintf','_sbrk','_malloc_r']:
  check(not re.search(r'\b'+symbol+r'$',symbols,re.M),'Unexpected stdio/heap dependency '+symbol)
 if combined:
- for symbol in ['communication_run','uart_rx_interrupt','pico2_handle_frame','log_workflow_completed','upload_poll','rt_upload_send','rt_upload_result_take']:
+ check(int(macros['CNF_MAX_MBFID']) >= 4,'Course message-buffer capacity')
+ check(len(re.findall(r'\btk_cre_mbf\s*\(', (W/'kernel_io.c').read_text())) == 4,'Application must stay within four message buffers')
+ for symbol in ['communication_run','uart_rx_interrupt','pico2_handle_frame','log_workflow_completed','upload_poll','rt_upload_send','rt_upload_result_take','rt_config_request_send','rt_config_result_take']:
   check(re.search(r'\b'+symbol+r'$',symbols,re.M),'Combined symbol missing: '+symbol)
+ if not check_only:check(re.search(r'\bhttp_config_start$',symbols,re.M),'PC configuration GET entry missing')
  check(macros.get('APP_COMBINED')=='1','Combined flag')
  radio=dict(re.findall(r'^#define (\w+) (.*)$',run([*cmd,'-dM','-E','../lib/libwifi/sysdepend/pico_rp2040/cyw43_utk_kernel.c']),re.M))
  check(radio.get('CYW43_TASK_PRIORITY')=='6','Combined radio priority')

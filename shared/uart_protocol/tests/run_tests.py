@@ -11,7 +11,15 @@ subprocess.run([*flags,str(s/"tests/test_codec_transfer.c"),str(sensor/"encoder.
 fixture=out/"actual-codec-pages.bin"
 subprocess.run([str(codec),str(fixture)],check=True)
 backend=out/"backend"
-sources=list((s/"src/protocol").glob("*.c"))+[s/"src/pico1/pico1_protocol.c",s/"src/pico2/pico2_protocol.c"]
+libraries=out/"libraries"
+libraries.mkdir(parents=True,exist_ok=True)
+recipe=out/"libraries.mk"
+recipe.write_text(".DEFAULT_GOAL := all\nGCC := gcc\nCFLAGS := -std=c11\nTARGET := HOST\nRM := rm -rf\n"
+    +f"UART_PROTOCOL_ROOT := {s}\nUART_LIBRARY_DIR := {libraries}\n"
+    +"UART_ENDPOINTS := gateway sensor\n"
+    +f"include {s}/library.mk\n-include $(C_DEPS)\nall: $(OBJS)\n")
+subprocess.run(["make","-B","-f",str(recipe),"--jobs=4","all"],check=True)
+sources=[libraries/"libuart_gateway.a",libraries/"libuart_sensor.a",libraries/"libuart_wire.a"]
 subprocess.run([*flags,str(s/"tests/test_backends.c"),*map(str,sources),"-o",str(backend)],check=True)
 subprocess.run([str(backend),str(fixture)],check=True)
 spec=importlib.util.spec_from_file_location("jz_decoder",sensor/"tools/decode.py")
@@ -46,8 +54,8 @@ for name in ("test_protocol", "test_reliability"):
         "overflow_recovery","pending_failure","parser_resync","wire_faults")]
     for case in cases: subprocess.run([str(executable),*case],check=True)
 print("PASS: baseline protocol assertions and all 8 reliability groups also pass against the shared library")
-evidence={"kind":"host UART tests with simulated wire/storage callbacks", "result":"PASS", "physical":"NOT TESTED", "sensor_firmware":"unchanged; encoder and decoder read-only", "baseline_protocol_assertions":"PASS", "shared_reliability_groups_passed":8, "checks":[
- "two unchanged-encoder pages transferred byte-for-byte", "JZ decoder validates expected samples and page CHECKs",
+evidence={"kind":"host UART tests with simulated wire/storage callbacks", "result":"PASS", "physical":"NOT TESTED", "sensor_firmware":"interval12 encoder/decoder; other Sensor modules unchanged", "baseline_protocol_assertions":"PASS", "shared_reliability_groups_passed":8, "checks":[
+ "two interval12 encoder pages transferred byte-for-byte", "JZ decoder validates expected samples and page CHECKs",
  "shared endpoints release source on completion, abort and retry exhaustion", "CONFIG validation and rejected oversized source",
  "simulated delayed CLEAR completion, lost ACK without repeated clear, failure NACK"]}
 (s/"tests/results.json").write_text(json.dumps(evidence,indent=2)+"\n")

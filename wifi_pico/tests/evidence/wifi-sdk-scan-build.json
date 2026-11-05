@@ -1,0 +1,21 @@
+{
+  "kind": "build/static only",
+  "physical_result": "PENDING user test",
+  "sdk_version": "2.2.0",
+  "pins": {
+    ".": "a1438dff1d38bd9c65dbd693f0e5db4b9ae91779",
+    "lib/cyw43-driver": "dd7568229f3bf7a37737b9e1ef250c26efe75b23",
+    "lib/tinyusb": "86ad6e56c1700e85f1c5678607a762cfe3aa2f47"
+  },
+  "board": "pico_w RP2040",
+  "execution": "single core; no RTOS; independent scan control",
+  "scan_rounds": 3,
+  "country": "worldwide",
+  "uart": "unused",
+  "http": "absent",
+  "uf2_bytes": 561152,
+  "uf2_sha256": "51e5dca62d32d3c6f3717a2b29150d8f16550c7cb89a455ff86d9cf5b95d1943",
+  "password_absent_from_binary": true,
+  "existing_http_and_uart_uf2_unchanged": true,
+  "frozen_uart_baseline_unchanged": true
+}

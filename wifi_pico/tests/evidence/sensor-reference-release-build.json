@@ -1,0 +1,13 @@
+{
+  "kind": "clean build/static checks only",
+  "physical_result": "PENDING",
+  "sdk": "2.2.0",
+  "board": "pico_w RP2040",
+  "build_type": "Release",
+  "tinyusb_debug": 0,
+  "source_changed": false,
+  "protected_files_unchanged": 125,
+  "uf2_binary_equality": true,
+  "uf2_bytes": 70656,
+  "uf2_sha256": "8d7163f0fe346051c662e41fa377372eca21e80e0f38e8c1266169ed8a7652ea"
+}

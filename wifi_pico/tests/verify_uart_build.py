@@ -50,7 +50,7 @@ commands=[shlex.split(s) for s in log.splitlines() if s.startswith("arm-none-eab
 check(commands,"Run a clean build to record actual compiler invocations")
 for c in commands:
     check("-DCNF_SMP=1" in c and "-D_PICO_RP2040_" in c,"Wrong source target")
-check(any("../../main.c" in c for c in commands),"UART entry missing")
+check(any("../../tests/firmware/uart_main.c" in c for c in commands),"UART entry missing")
 check(not any("../app_program/app_main.c" in c or "../../tests/firmware/smp_boot_main.c" in c for c in commands),
       "Wrong app compiled")
 sources=[t for c in commands for t in c if t.endswith(".c") and "shared/uart_protocol/src/" in t]
@@ -60,7 +60,7 @@ check({s.split("shared/uart_protocol/src/")[1] for s in sources}==expected,"Wron
 legacy=[t for c in commands for t in c if t.endswith(".c") and "../../../uart_protocol/src/" in t]
 check(set(legacy)==({"../../../uart_protocol/src/demo/mock_logger.c"} if emulator else set()),"Unexpected baseline implementation linked")
 common=["arm-none-eabi-gcc",*flags,"-D_PICO_RP2040_","-I../include","-I../config","-I../kernel/knlinc"]
-macros=dict(re.findall(r"^#define (\w+) (.*)$",run([*common,"-dM","-E","../../main.c"]),re.M))
+macros=dict(re.findall(r"^#define (\w+) (.*)$",run([*common,"-dM","-E","../../tests/firmware/uart_main.c"]),re.M))
 for k,v in {"CNF_SMP":"1","TK_MAX_CORE":"2","TM_CONSOLE_USB_CDC":"1","TM_CONSOLE_UART":"0",
             "USE_SDEV_DRV":"(0)","UART_FAULT":str(mode),"APP_SENSOR_EMULATOR":str(emulator),"APP_VERBOSE_DIAGNOSTICS":str(diagnostics)}.items():
     check(macros.get(k)==v,"Wrong effective macro "+k)

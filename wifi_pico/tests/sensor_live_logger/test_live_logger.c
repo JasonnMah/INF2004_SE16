@@ -95,6 +95,18 @@ static void init_pair(void)
 static void save_fixture(const char *path)
 {
     live_logger_init(&log_data);
+    assert(live_logger_configure(&log_data, 1700000000, 4095u * 60u));
+    assert(live_logger_append(&log_data, true, 3000));
+    static live_logger_t before;
+    before = log_data;
+    const uint32_t invalid[] = {0, 1, 59, 61, 4096u * 60u, UINT32_MAX};
+    for (unsigned i = 0; i < sizeof(invalid) / sizeof(invalid[0]); ++i) {
+        assert(!live_logger_configure(&log_data, 1700000000, invalid[i]));
+        assert(!memcmp(&before, &log_data, sizeof(log_data)));
+    }
+    assert(live_logger_clear(&log_data));
+    assert(live_logger_configure(&log_data, 1700000000, 60));
+    assert(live_logger_clear(&log_data));
     assert(!live_logger_configure(&log_data, 1700000000, 1));
     assert(!live_logger_configure(&log_data, 1700000000, 0));
     assert(!live_logger_configure(&log_data, 1700000000, 60u * 65536u));

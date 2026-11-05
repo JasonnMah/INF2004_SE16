@@ -3,10 +3,10 @@
 A two-board temperature logger using Raspberry Pi Pico W boards. The Sensor
 Pico reads an AHT10 and compresses the readings. The Wi-Fi Pico retrieves them
 over UART and uploads them to a PC using HTTP. The PC decodes the data and
-provides a downloadable CSV with Singapore timestamps.
+provides a downloadable CSV with timestamps.
 
 The current demonstration stores readings in **Sensor RAM**. The Sensor is
-bare-metal; the Wi-Fi Pico uses the course micro T-Kernel 3 SMP port.
+bare-metal; the Wi-Fi Pico uses the micro T-Kernel 3 SMP port.
 
 ## 1. Install the requirements
 
@@ -45,9 +45,7 @@ the PC receiver requires only Python and the complete project folder.
 ## 2. Configure the network
 
 Use a **2.4 GHz WPA2 network** that allows the Pico to reach the PC. A home
-router or Windows laptop hotspot works. Campus username/password Wi-Fi is
-not implemented. With a laptop hotspot, the Pico joins that hotspot while
-the laptop can keep its existing Internet connection.
+router or mobile/laptop hotspot works.
 
 Open PowerShell in the project root. Create the local settings file once:
 
@@ -104,11 +102,12 @@ buzzer switch if audible error feedback is wanted.
 In another PowerShell terminal, from the project root, run:
 
 ```powershell
-python .\wifi_pico\tools\http_receiver.py --bind 0.0.0.0 --port 8000 `
-  --decode-jz --timestamp-source pc-clock --log-format interval12 `
-  --output .\http_received\pc_interval
+.\wifi_pico\receive.ps1
 ```
 
+The launcher uses port **8000**, enables temperature decoding/CSV, uses the
+PC clock and `interval12`, and saves files under `http_received/pc_interval`.
+It works from any working directory when invoked using its path.
 The receiver listens on the PC's network interfaces. Allow Python through
 Windows Firewall on the network used for the Pico if Windows prompts.
 Open **http://localhost:8000/** on the PC. Keep this terminal running while
@@ -125,8 +124,11 @@ command and output folder. No firmware reflash is needed to restart the receiver
    not needed; the current live Sensor firmware is controlled through UART.
 4. Press **Wi-Fi GP21 once** to retrieve the readings collected so far.
 5. After retrieval completes, press **Wi-Fi GP21 again** to upload the saved log.
-6. Refresh the PC webpage and download the CSV. Its columns are
-   `sample`, `temperature_c`, `timestamp_sgt` and `status`.
+6. Refresh the PC webpage and download files such as `Download_temp_2026-11-05_1.csv`.
+   The date is when the PC first received the log, in Singapore time. The existing
+   sequence continues across dates and receiver restarts in the same output folder;
+   retries and repeat downloads keep the same name. Columns remain `sample`,
+   `temperature_c`, `timestamp_sgt` and `status`.
 
 GP21 retrieves stored readings; it does not trigger a new measurement.
 Readings collected after that snapshot appear in the next retrieval/upload.

@@ -10,6 +10,17 @@
 #define APP_STATUS_CLEAR 3u
 #define APP_STATUS_FAILED 4u
 #define APP_STATUS_UPLOAD 5u
+#define APP_STATUS_TRANSFERRING 6u
+#define APP_STATUS_LOADING 7u
+/* Combined image only: transport prefix, outside the unchanged protocol frame.
+ * Duration is provisional until JZ's actual sleep/wake setup is available. */
+#define APP_UART_PREAMBLE_BYTE 0x55u
+#define APP_UART_PREAMBLE_LENGTH 32u
+#define APP_TRANSFER_BLINK_MS 100u
+#define APP_LOADING_BLINK_MS 400u
+#define APP_TRANSFER_HEARTBEAT_MS 250u
+/* Expiry prevents a lost result indication leaving GP6 blinking forever. */
+#define APP_TRANSFER_LEASE_MS 1000u
 #ifndef APP_COMBINED
 #define APP_COMBINED 0
 #endif
@@ -54,6 +65,8 @@ void rt_buttons_init(void);
 unsigned rt_button_low(unsigned pin);
 void rt_led_init(void);
 void rt_led_set(unsigned on);
+void rt_buzzer_init(void);
+void rt_buzzer_set(unsigned on);
 void rt_fatal(const char *operation, int error);
 
 void communication_init(void);
@@ -63,6 +76,8 @@ void sensor_emulator_init(void);
 void sensor_emulator_step(void);
 void sensor_emulator_run(void);
 void ui_run(void);
+void status_init(void);
+void status_step(void);
 void status_run(void);
 
 /* Owner-context snapshots for host tests; no cross-core buffer sharing. */
