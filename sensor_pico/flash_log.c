@@ -25,6 +25,8 @@ _Static_assert(FLOG_REGION_BYTES < PICO_FLASH_SIZE_BYTES, "region larger than fl
 
 static uint32_t cur_page;
 static bool     full;
+static int32_t  erase_sector;
+static bool     erase_active;
 
 static const uint8_t *page_ptr(uint32_t page) {
     return (const uint8_t *)(uintptr_t)(XIP_BASE + FLOG_REGION_OFFSET + page * FLOG_PAGE_BYTES);
@@ -60,6 +62,15 @@ bool flog_page_is_empty(uint32_t page) {
     return true;
 }
 
+bool flog_data_view(const uint8_t **data, size_t *length) {
+    if (data == NULL || length == NULL) return false;
+    uint32_t pages = 0;
+    while (pages < FLOG_PAGE_COUNT && !flog_page_is_empty(pages)) ++pages;
+    *data = page_ptr(0);
+    *length = (size_t)pages * FLOG_PAGE_BYTES;
+    return true;
+}
+
 void flog_read_page(uint32_t page, uint8_t out[FLOG_PAGE_BYTES]) {
     memcpy(out, page_ptr(page), FLOG_PAGE_BYTES);
 }
@@ -79,18 +90,39 @@ flog_status_t flog_init(void) {
     return FLOG_ERR_FULL;
 }
 
-bool flog_erase_all(void) {
-    bool ok = true;
-    for (int32_t s = (int32_t)(FLOG_REGION_BYTES / FLASH_SECTOR_SIZE) - 1; s >= 0; s--) {
-        uint32_t off = FLOG_REGION_OFFSET + (uint32_t)s * FLASH_SECTOR_SIZE;
-        if (!run_flash_op(do_erase, &off)) {
-            printf("flash: erase of sector %d failed\n", (int)s);
-            ok = false;
-        }
+bool flog_erase_begin(void) {
+    if (erase_active) return false;
+    erase_sector = (int32_t)(FLOG_REGION_BYTES / FLASH_SECTOR_SIZE) - 1;
+    erase_active = true;
+    return true;
+}
+
+bool flog_erase_step(bool *complete) {
+    if (complete == NULL || !erase_active) return false;
+    *complete = false;
+    uint32_t off = FLOG_REGION_OFFSET + (uint32_t)erase_sector * FLASH_SECTOR_SIZE;
+    if (!run_flash_op(do_erase, &off)) {
+        printf("flash: erase of sector %d failed\n", (int)erase_sector);
+        erase_active = false;
+        return false;
     }
-    cur_page = 0;
-    full = false;
-    return ok;
+
+    if (--erase_sector < 0) {
+        cur_page = 0;
+        full = false;
+        erase_active = false;
+        *complete = true;
+    }
+    return true;
+}
+
+bool flog_erase_all(void) {
+    if (!flog_erase_begin()) return false;
+    bool complete = false;
+    while (!complete) {
+        if (!flog_erase_step(&complete)) return false;
+    }
+    return true;
 }
 
 flog_status_t flog_program_page(const uint8_t image[FLOG_PAGE_BYTES]) {

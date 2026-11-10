@@ -3,25 +3,36 @@ cmake_minimum_required(VERSION 3.13)
 # Pico W board (2 MB flash). The Wi-Fi chip is never initialised: no cyw43 library is linked.
 set(PICO_BOARD pico_w CACHE STRING "Board type")
 
-# Copy pico_sdk_import.cmake from <pico-sdk>/external/ into this folder first.
+set(PICO_EXTRAS_PATH "${CMAKE_CURRENT_SOURCE_DIR}/pico-extras" CACHE PATH "Path to Pico Extras")
+
 include(pico_sdk_import.cmake)
+include(pico_extras_import.cmake)
 
 project(sensor_pico C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 
 pico_sdk_init()
 
+get_filename_component(REPOSITORY "${CMAKE_CURRENT_LIST_DIR}/.." ABSOLUTE)
+add_subdirectory("${REPOSITORY}/shared/uart_protocol" shared_uart)
+
 add_executable(sensor_pico
     main.c
     aht10.c
     encoder.c
     flash_log.c
+    low_power.c
 )
 
 target_link_libraries(sensor_pico
     pico_stdlib
     hardware_i2c
+    hardware_sleep
     hardware_flash
+    hardware_uart
+    hardware_irq
+    hardware_sync
+    uart::sensor
 )
 
 # SDK 2.x only: flash_safe_execute lives in pico_flash. On SDK 1.x flash_log.c disables interrupts instead.
@@ -40,5 +51,7 @@ if(ERASE_LOG_ON_BOOT)
 endif()
 
 target_compile_options(sensor_pico PRIVATE -Wall -Wextra)
+# Keep USB diagnostics from delaying UART frame processing if the monitor stalls.
+target_compile_definitions(sensor_pico PRIVATE PICO_STDIO_USB_STDOUT_TIMEOUT_US=2000)
 
 pico_add_extra_outputs(sensor_pico)
