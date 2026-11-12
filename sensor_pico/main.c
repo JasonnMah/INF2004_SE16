@@ -59,6 +59,7 @@
 #define PIN_SAMPLE      20
 #define PIN_FLUSH       21
 #define PIN_DUMP        22
+#define BUTTONS_ENABLED 1
 
 #define POLL_MS          5                      /* loop period while awake */
 #define UART_LINGER_MS   500u                   /* stay awake this long after the last UART activity */
@@ -452,9 +453,11 @@ int main(void) {
     enc_reset_page(&enc);
 
     lp_init();
+#if BUTTONS_ENABLED
     lp_add_button(PIN_SAMPLE);
     lp_add_button(PIN_FLUSH);
     lp_add_button(PIN_DUMP);
+#endif
     lp_add_uart_wake(SENSOR_UART, SENSOR_RX);   /* after uart_init and the pin setup above */
 
     printf("GP20 = sample, GP21 = flush to flash, GP22 = dump flash (all wake the chip)\n");

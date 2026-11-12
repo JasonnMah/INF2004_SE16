@@ -1,3 +1,11 @@
+## Data Integrity
+TODO
+
+## Current draw
+sleep - 0.013A
+sending log - 0.024A
+clear flash - 0.032A
+
 ## Encoded data
 
 Each 256-byte flash page stores a stream of 4-bit nibbles, packed high nibble first. A code may start in either half of a byte.
