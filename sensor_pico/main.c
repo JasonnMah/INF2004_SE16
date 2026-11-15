@@ -85,7 +85,7 @@ static uint32_t log_timestamp = FAKE_UNIX_TIME;
 static uint16_t log_interval_minutes = FAKE_INTERVAL;
 static absolute_time_t next_sample;
 static absolute_time_t next_auto_flush;
-static bool snapshot_held;
+static bool snapshot_held;      // prevent buttons and timer from touching flash while wifi pico is doing operations
 static bool clear_in_progress;
 static pico1_ctx_t endpoint;
 static stream_parser_t parser;
@@ -358,11 +358,11 @@ static pico1_storage_result_t protocol_clear_poll(void *context) {
  * so presses are consumed rather than replayed afterwards. Returns true if anything fired. */
 static bool service_events(bool protocol_busy) {
     bool did = false;
-    if (lp_take_timer()) {
+    if (lp_take_timer()) { // if timer flag was set in an interrupt
         did = true;
         if (config_received) {
-            next_sample = delayed_by_ms(next_sample, sample_period_ms()); /* absolute schedule: no drift */
-            lp_arm_timer(next_sample);
+            next_sample = delayed_by_ms(next_sample, sample_period_ms()); // 'time when recieve config' + 'configured sample period'
+            lp_arm_timer(next_sample); // sets alarm for when time to do the next sample
             if (!protocol_busy) {
                 do_sample();
                 if (time_reached(next_auto_flush)) {
@@ -372,6 +372,7 @@ static bool service_events(bool protocol_busy) {
             }
         }
     }
+    // if gpio flags were set in an interrupt
     if (lp_take_button(PIN_SAMPLE)) {
         if (config_received && !protocol_busy) do_sample();
         did = true;
@@ -475,7 +476,11 @@ int main(void) {
             printf("[UART] RX overflow: dropped=%" PRIu32 "; transfer aborted\n", observed_drops);
         }
 
-        /* Bound work per pass so button handling and ACK/retry processing stay responsive. */
+        // pulls bytes out of the receive ring, feeds them to the stream parser, and handles each complete frame. 
+        // It stops after 128 bytes(defined as RX_POLL_BUDGET) even if more are waiting, 
+        // and carries on with the rest of the main loop. 
+        // The remaining bytes are picked up on the next pass
+        // Bound work per pass so button handling and ACK/retry processing stay responsive.
         for (unsigned n = 0; n < RX_POLL_BUDGET; ++n) {
             uint8_t byte;
             if (!pop_uart_byte(&byte)) break;

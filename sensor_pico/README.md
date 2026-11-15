@@ -1,5 +1,9 @@
 ## Data Integrity
-TODO
+A 16-bit CRC is appended at the end of every buffer flush to flash memory.
+This is purely used to detect if data is correct. There is no mechanism for data
+recovery. Corrupted segments are discarded.
+
+We have decided to not implement data recovery for this project.
 
 ## Current draw
 sleep - 0.013A
