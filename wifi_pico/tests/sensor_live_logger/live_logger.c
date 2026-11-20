@@ -15,7 +15,7 @@ bool live_logger_configure(live_logger_t *logger, uint32_t timestamp, uint32_t s
 {
     /* UART uses seconds; JZ's TIMEBASE stores whole minutes. Reject a value we
      * cannot represent instead of silently rounding it or changing the codec. */
-    if (!seconds || seconds % 60u || seconds / 60u > ENC_MAX_INTERVAL_MINUTES ||
+    if (!seconds || seconds % 60u || seconds / 60u > ENC_MAX_INTERVAL_MIN ||
         logger->full || logger->snapshot_held) return false;
     /* Keep old readings. The next good reading starts a new TIMEBASE record
      * containing the updated time and interval, followed by a temperature anchor. */

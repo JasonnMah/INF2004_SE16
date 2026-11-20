@@ -13,6 +13,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 #ifndef FLOG_REGION_BYTES
 #define FLOG_REGION_BYTES (1024u * 1024u)       /* must be a multiple of the 4096-byte sector */
@@ -42,6 +43,10 @@ bool flog_erase_sector(uint32_t sector);
  * A failure does not mark partially erased storage as empty or writable. */
 bool flog_erase_all(void);
 
+/* Incremental erase API for callers that must keep servicing other work. */
+bool flog_erase_begin(void);
+bool flog_erase_step(bool *complete);
+
 /* Program the 256-byte image to the current page. */
 flog_status_t flog_program_page(const uint8_t image[FLOG_PAGE_BYTES]);
 
@@ -56,5 +61,8 @@ void flog_read_page(uint32_t page, uint8_t out[FLOG_PAGE_BYTES]);
 bool flog_page_is_empty(uint32_t page);
 /* Read-only XIP source; caller freezes the page range before borrowing it. */
 const uint8_t *flog_data(void);
+
+/* View contiguous programmed pages without a RAM copy; keep them unchanged while leased. */
+bool flog_data_view(const uint8_t **data, size_t *length);
 
 #endif

@@ -52,6 +52,7 @@ static uint32_t frozen_length;
 #define PIN_FLUSH       21
 #define PIN_DUMP        22
 
+#define AUTO_FLUSH_MS   3600000u                /* flush at a sample wake after each hour */
 #define POLL_MS         5
 #define DEBOUNCE_TICKS  6                       /* 6 x 5 ms = 30 ms of a stable level */
 
@@ -69,10 +70,10 @@ static bool storage_ready, storage_failed, sampling, configured, boot_written;
 static bool snapshot_held, clear_active, dumping;
 static uint8_t snapshot_bytes[STORAGE_TRANSFER_CAPACITY];
 static size_t snapshot_length;
-static uint32_t clear_sectors_left, samples_saved;
+static uint32_t samples_saved;
 static uint32_t config_timestamp = FAKE_UNIX_TIME;
 static uint32_t config_interval_seconds = FAKE_INTERVAL * 60u;
-static uint64_t config_started_ms, next_sample_ms;
+static uint64_t config_started_ms, next_sample_ms, next_auto_flush_ms;
 #ifdef SENSOR_LIGHT_SLEEP
 static uint64_t armed_sample_ms;
 static uint32_t sleep_entries, sample_alarms;
@@ -236,11 +237,12 @@ static bool uart_configure(void *context, uint32_t timestamp, uint32_t seconds) 
     (void)context;
     if (!storage_ready || storage_failed || log_stopped || clear_active || dumping ||
         snapshot_held || !seconds || seconds % 60u ||
-        seconds / 60u > ENC_MAX_INTERVAL_MINUTES) return false;
+        seconds / 60u > ENC_MAX_INTERVAL_MIN) return false;
     config_timestamp = timestamp;
     config_interval_seconds = seconds;
     config_started_ms = now_ms();
     next_sample_ms = config_started_ms;
+    next_auto_flush_ms = config_started_ms + AUTO_FLUSH_MS;
     configured = sampling = true;
     need_start = true; /* Keep old readings; record the new time/interval. */
     printf("[CONFIG] interval=%" PRIu32 " seconds; timestamp=%" PRIu32 " (PC time, no RTC)\n",
@@ -255,22 +257,21 @@ static bool uart_snapshot(void *context, const uint8_t **bytes, size_t *length) 
      * to press it before a remote retrieval. The transmitted source is flash. */
     if (enc.nib && !log_stopped) do_flush();
     if (storage_failed) return false;
-    uint32_t pages = flog_is_full() ? FLOG_PAGE_COUNT : flog_current_page();
-    if (!flog_is_full() && !flog_page_is_empty(pages)) ++pages;
-    size_t total = (size_t)pages * FLOG_PAGE_BYTES;
+    const uint8_t *flash;
+    size_t total;
+    if (!flog_data_view(&flash, &total)) return false;
     if (total > sizeof(snapshot_bytes)) {
         printf("[LOG] Retrieval refused: flash has %u bytes, transfer capacity=%u; batching required\n",
                (unsigned)total, (unsigned)sizeof(snapshot_bytes));
         return false; /* Never silently truncate the flash log. */
     }
-    for (uint32_t page = 0; page < pages; ++page)
-        flog_read_page(page, snapshot_bytes + page * FLOG_PAGE_BYTES);
+    memcpy(snapshot_bytes, flash, total);
     snapshot_length = total;
     snapshot_held = true;
     *bytes = snapshot_bytes;
     *length = total;
     printf("[LOG] Flash snapshot: bytes=%u pages=%u crc16_x25=%04x\n",
-           (unsigned)total, (unsigned)pages, crc16_x25(snapshot_bytes, total));
+           (unsigned)total, (unsigned)(total / FLOG_PAGE_BYTES), crc16_x25(snapshot_bytes, total));
     return true;
 }
 
@@ -282,11 +283,6 @@ static void uart_release(void *context, bool completed) {
 }
 
 #ifdef SENSOR_BATCHED
-static uint32_t flash_used_bytes(void) {
-    uint32_t pages = flog_is_full() ? FLOG_PAGE_COUNT : flog_current_page();
-    if (!flog_is_full() && !flog_page_is_empty(pages)) ++pages;
-    return pages * FLOG_PAGE_BYTES;
-}
 static bool sensor_open_batch(void *context, const batch_info_t *request,
                               batch_info_t *result, uint8_t *buffer) {
     (void)context;
@@ -305,10 +301,12 @@ static bool sensor_open_batch(void *context, const batch_info_t *request,
             need_start = true;
         }
         if (storage_failed) return false;
-        uint32_t available = flash_used_bytes();
+        size_t available;
+        const uint8_t *flash;
+        if (!flog_data_view(&flash, &available)) return false;
         total = fresh ? available : request->total;
         if (total > available || total > UART_BATCH_MAX_LOG || total % FLOG_PAGE_BYTES) return false;
-        log_digest(flog_data(), total, digest);
+        log_digest(flash, total, digest);
         if (!fresh && memcmp(request->sha256, digest, sizeof(digest))) return false;
     }
     if (request->offset > total || request->offset % UART_BATCH_BYTES ||
@@ -329,12 +327,15 @@ static bool sensor_open_batch(void *context, const batch_info_t *request,
 }
 static bool sensor_finish_batch(void *context, const uint8_t digest[32], uint32_t total) {
     (void)context;
-    if (!storage_ready || storage_failed || clear_active || dumping || total > flash_used_bytes()) return false;
+    if (!storage_ready || storage_failed || clear_active || dumping) return false;
+    const uint8_t *flash;
+    size_t available;
+    if (!flog_data_view(&flash, &available) || total > available) return false;
     uint8_t actual[32];
     if (snapshot_held) {
         if (total != frozen_length || memcmp(digest, frozen_digest, 32)) return false;
     } else {
-        log_digest(flog_data(), total, actual);
+        log_digest(flash, total, actual);
         if (memcmp(actual, digest, 32)) return false;
     }
     snapshot_held = false;
@@ -345,10 +346,10 @@ static bool sensor_finish_batch(void *context, const uint8_t digest[32], uint32_
 
 static pico1_storage_result_t uart_clear_begin(void *context) {
     (void)context;
-    if (!storage_ready || snapshot_held || clear_active || dumping) return P1_STORAGE_ERROR;
+    if (!storage_ready || snapshot_held || clear_active || dumping ||
+        !flog_erase_begin()) return P1_STORAGE_ERROR;
     sampling = false;
     clear_active = true;
-    clear_sectors_left = FLOG_REGION_BYTES / FLASH_SECTOR_SIZE;
     printf("[CLEAR] Erasing and verifying flash; Sensor GP22 remains USB dump\n");
     return P1_STORAGE_PENDING;
 }
@@ -359,13 +360,14 @@ static pico1_storage_result_t uart_clear_poll(void *context) {
     /* One sector per loop, highest first as in the original logger. Interrupts
      * may still pause during each SDK flash operation; lost frames use retries.
      * Erasure is not power-fail atomic. Never ACK a partial or failed erase. */
-    if (!flog_erase_sector(--clear_sectors_left)) {
+    bool complete;
+    if (!flog_erase_step(&complete)) {
         clear_active = false;
         log_stopped = storage_failed = true;
         printf("[CLEAR] Failed erase/read-back; no success ACK; retry CLEAR to recover\n");
         return P1_STORAGE_ERROR;
     }
-    if (clear_sectors_left) return P1_STORAGE_PENDING;
+    if (!complete) return P1_STORAGE_PENDING;
     if (flog_init() != FLOG_OK || flog_current_page() != 0) {
         clear_active = false;
         log_stopped = storage_failed = true;
@@ -386,6 +388,10 @@ static void sampling_poll(void) {
     uint64_t started = now_ms();
     do_sample();
     next_sample_ms = started + (uint64_t)config_interval_seconds * 1000u;
+    if (started >= next_auto_flush_ms) {
+        if (enc_has_unsealed(&enc)) do_flush();
+        next_auto_flush_ms = started + AUTO_FLUSH_MS;
+    }
 }
 
 #ifdef SENSOR_LIGHT_SLEEP

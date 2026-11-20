@@ -131,10 +131,10 @@ static void restart_application(void) {
     need_start = true;
     log_stopped = storage_failed = sampling = configured = boot_written = false;
     snapshot_held = clear_active = dumping = false;
-    snapshot_length = samples_saved = clear_sectors_left = 0;
+    snapshot_length = samples_saved = 0;
     config_timestamp = FAKE_UNIX_TIME;
     config_interval_seconds = FAKE_INTERVAL * 60u;
-    config_started_ms = next_sample_ms = 0;
+    config_started_ms = next_sample_ms = next_auto_flush_ms = 0;
     flog_status_t result = flog_init();
     assert(result == FLOG_OK || result == FLOG_ERR_FULL);
     storage_ready = true;
@@ -268,9 +268,9 @@ int STORAGE_TEST_MAIN(int argc, char **argv) {
     unsigned before = erases;
     assert(pico2_clear_log(&wifi)); pump(20);
     assert(clear_active && wifi.pending_command.active && erases > before);
-    uint32_t remaining = clear_sectors_left;
+    unsigned erases_before_duplicate = erases;
     repeat_command(MSG_CLEAR_LOG); pump(10);
-    assert(clear_sectors_left < remaining);
+    assert(erases > erases_before_duplicate);
     pump(2000);
     assert(!clear_active && !sampling && !enc.nib && wifi.state == P2_COMPLETE);
     assert(erases - before == FLOG_REGION_BYTES / FLASH_SECTOR_SIZE);
@@ -313,7 +313,16 @@ int STORAGE_TEST_MAIN(int argc, char **argv) {
     corrupt_erase = false;
     assert(flog_erase_all());
 
+    restart_application();
+    assert(flog_erase_all());
+    assert(uart_configure(NULL, 1700000000u, 60u));
+    sampling_poll();
+    assert(flog_page_is_empty(0) && enc_has_unsealed(&enc));
+    clock_us += (uint64_t)AUTO_FLUSH_MS * 1000u;
+    sampling_poll();
+    assert(!flog_page_is_empty(0) && !enc_has_unsealed(&enc));
+
     assert(!munmap(mapped, PICO_FLASH_SIZE_BYTES));
-    puts("PASS Sensor flash UART host integration: original buttons/debounce, CONFIG, timed samples, real flash source, persistence model, immutable retries, lost final ACK, CRC, overflow, verified CLEAR/failures, capacity rejection");
+    puts("PASS Sensor flash UART host integration: original buttons/debounce, CONFIG, timed samples and hourly flush, real flash source, persistence model, immutable retries, lost final ACK, CRC, overflow, verified CLEAR/failures, capacity rejection");
     return 0;
 }
