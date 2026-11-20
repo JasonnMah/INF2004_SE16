@@ -1,9 +1,0 @@
-{
-  "name": "uart-stage1-firmware-tests",
-  "private": true,
-  "type": "module",
-  "description": "Optional local RP2040 firmware emulator tests; not part of Pico firmware",
-  "dependencies": {
-    "rp2040js": "1.4.0"
-  }
-}

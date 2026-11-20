@@ -4,7 +4,7 @@ from pathlib import Path
 import hashlib,json,re,shlex,struct,subprocess,sys,os
 W=Path(__file__).resolve().parents[1];R=W.parent
 B=Path(os.environ.get('INF2004_BUILD_DIR',W/'course/build_make')).resolve()
-E=Path(os.environ.get('INF2004_EVIDENCE_DIR',W/'tests/evidence'))
+E=Path(os.environ.get('INF2004_EVIDENCE_DIR',B/'checks'))
 E.mkdir(parents=True,exist_ok=True)
 check_only=int(sys.argv[1]);mode=sys.argv[2] if len(sys.argv)>2 else 'http'
 batched=mode=='batched';combined=mode in ('combined','batched')
@@ -19,7 +19,7 @@ def source_hash(p,mode='text-lf'):
  return hashlib.sha256(data).hexdigest()
 origin=json.loads((W/'course/ORIGIN.json').read_text())
 for e in origin['files']:check(source_hash(W/'course'/e.get('stored_path',e['path']),e['hash_mode'])==e['portable_sha256'],'Course source mismatch: '+e['path'])
-for n,h in json.loads((W/'tests/uart_baseline_sha256.json').read_text()).items():check(source_hash(R/n.replace('\\','/'))==h,'UART baseline changed: '+n)
+for n,h in json.loads((W/'tests/uart_baseline_sha256.json').read_text()).items():check(source_hash(R/n.replace('\\','/'))==h,'UART fixture changed: '+n)
 check((B/'.build_profile').read_text().strip()==profile,'Actual object profile')
 raw=(B/(mode+'-build.log' if combined else 'http-build.log')).read_bytes();log=raw.decode('utf-16' if raw.startswith(b'\xff\xfe') else 'utf-8-sig')
 flags=shlex.split(next(s[7:] for s in log.splitlines() if s.startswith('CFLAGS=')))
@@ -82,5 +82,5 @@ result={'kind':'build/static only','physical_http':'NOT TESTED','build_check_onl
 if combined:
  result['combined_source_sha256']={str(p.relative_to(W)):source_hash(p) for p in sorted(list(W.glob('*.c'))+list(W.glob('*.h'))+[W/'config/combined.mk'])}
 (E/((mode if combined else 'http')+('-build-check.json' if check_only else '-build.json'))).write_text(json.dumps(result,indent=2)+'\n')
-print('PASS build/static checks: '+image+'; SMP=1, USB, radio-owner hook, unchanged UART baseline')
+print('PASS build/static checks: '+image+'; SMP=1, USB, radio-owner hook, unchanged UART fixtures')
 print(size)

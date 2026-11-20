@@ -3,7 +3,7 @@
 from pathlib import Path
 import subprocess,importlib.util,json,re,sys
 sys.dont_write_bytecode=True
-s=Path(__file__).resolve().parents[1];sensor=s.parents[1];r=sensor.parent
+s=Path(__file__).resolve().parents[1];sensor=s.parents[1]
 out=s/"build/host";out.mkdir(parents=True,exist_ok=True)
 flags=["gcc","-std=c11","-Wall","-Wextra","-Werror","-I"+str(s/"src"),"-I"+str(sensor)]
 codec=out/"codec"
@@ -30,7 +30,7 @@ assert all(x["status"] in ("ok","SENSOR_ERR") for x in samples),samples
 assert not any("mismatch" in n or "UNVERIFIED" in n for n in notes),notes
 print("PASS: JZ's actual Python decoder validates both preserved pages/CHECKs and expected previous-value deltas")
 # Reuse the baseline assertions unchanged; only adapt their old link constructors.
-# The original test files remain byte-for-byte preserved in wifi_pico/tests/legacy_uart/.
+# The original test sources are preserved in tests/fixtures/.
 compat = """
 typedef struct { unsigned id; } uart_inst_t;
 uint64_t time_us_64(void);
@@ -42,7 +42,7 @@ static protocol_link_t compat_link(uart_inst_t *uart)
 { return (protocol_link_t){.context=uart,.session_id=SESSION,.write=compat_write,.now_ms=compat_now}; }
 """
 for name in ("test_protocol", "test_reliability"):
-    original=(r/"wifi_pico/tests/legacy_uart/tests"/(name+".c")).read_text()
+    original=(s/"tests/fixtures"/(name+".c")).read_text()
     converted=re.sub(r"(#define SESSION[^\n]*\n)",lambda m:m[0]+compat,original,count=1)
     converted,count=re.subn(r"\(protocol_link_t\)\{(&\w+), SESSION, NULL\}",r"compat_link(\1)",converted)
     assert count==2

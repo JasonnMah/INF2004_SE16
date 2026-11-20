@@ -5,9 +5,9 @@ import subprocess, hashlib, json, csv, re, shlex, struct, collections, os
 WIFI = Path(__file__).resolve().parents[1]
 ROOT = WIFI.parent
 BUILD = Path(os.environ.get("INF2004_BUILD_DIR",WIFI / "course/build_make")).resolve()
-EVIDENCE = Path(os.environ.get("INF2004_EVIDENCE_DIR",WIFI / "tests/evidence"))
+EVIDENCE = Path(os.environ.get("INF2004_EVIDENCE_DIR",BUILD / "checks"))
 PIN = "2e8e6ad480c2d84a369b12995694b9bf5e9ddfb3"
-EVIDENCE.mkdir(exist_ok=True)
+EVIDENCE.mkdir(parents=True, exist_ok=True)
 
 def require(condition, message):
     if not condition:
@@ -42,7 +42,7 @@ require(modified == ["build_make/makefile", "build_make/pico_rp2040.mk", "config
 
 baseline = json.loads((WIFI / "tests/uart_baseline_sha256.json").read_text())
 for name, expected in baseline.items():
-    require(source_sha(ROOT / name.replace("\\", "/")) == expected, "UART baseline changed: " + name)
+    require(source_sha(ROOT / name.replace("\\", "/")) == expected, "UART fixture changed: " + name)
 require((BUILD / ".build_profile").read_text().strip() ==
         "inf2004-milestone1-smp1-usb-only-v2", "Stale build profile")
 
@@ -214,7 +214,7 @@ summary = {
 (EVIDENCE / "milestone1-effective-config.txt").write_text(
     "\n".join(f"{k}={v}" for k,v in summary["effective_macros"].items())+
     "\nCFLAGS="+shlex.join(flags)+"\nASFLAGS="+shlex.join(asflags)+"\n")
-print(f"PASS: pinned source, {len(baseline)} baseline hashes, 599-file audit, actual SMP compiler/assembler flags")
+print(f"PASS: pinned source, {len(baseline)} UART fixture hashes, 599-file audit, actual SMP compiler/assembler flags")
 print("PASS: USB-only console; UART0 drivers absent; GPIO startup table empty")
 print("PASS: single-core / UART console / radio configurations rejected; valid RP2040 UF2")
 print(size_text)

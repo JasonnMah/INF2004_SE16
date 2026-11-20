@@ -100,5 +100,4 @@ cmake --build sensor_pico/build/host-unit --config Debug
 ctest --test-dir sensor_pico/build/host-unit -C Debug --output-on-failure
 ```
 
-The standalone UART reference lives under wifi_pico/tests/legacy_uart.
-Both firmware builds use the shared library under sensor_pico/lib.
+See [encoder.h](sensor_pico/encoder.h) for the compressed flash-page format.
