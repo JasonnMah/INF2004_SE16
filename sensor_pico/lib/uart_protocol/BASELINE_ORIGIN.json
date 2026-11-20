@@ -1,5 +1,5 @@
 {
-  "baseline": "uart_protocol/src",
+  "baseline": "wifi_pico/tests/legacy_uart/src",
   "original_text_lf_sha256": {
     "protocol/protocol.h": "8c242b8c364eeb2d492338b51dfbdd5af1dac23d1bc3b5b778d6057be5214f46",
     "protocol/crc16.c": "786c93e54fc7b2363b2e556fae35f9ddcaf88c07669aabfacd5780ab82b53d48",

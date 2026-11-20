@@ -7,7 +7,7 @@ import importlib.util, json, subprocess, sys
 sys.dont_write_bytecode = True
 here = Path(__file__).resolve().parent
 root = here.parents[2]
-shared = root / "shared/uart_protocol/src"
+shared = root / "sensor_pico/lib/uart_protocol/src"
 sensor = root / "sensor_pico"
 out = here / "build/host"
 out.mkdir(parents=True, exist_ok=True)

@@ -22,7 +22,7 @@ EXE_FILE := $(EXE_FILE)_buildcheck
 endif
 CFLAGS += -DAPP_BATCHED=$(APP_BATCHED) -DAPP_COMBINED=1 -DTM_APP_HTTP=1 -DHTTP_BUILD_CHECK=$(HTTP_BUILD_CHECK) -DTM_CONSOLE_UART=0 \
  -DAPP_SENSOR_EMULATOR=0 -include ../../config/project.h \
- -I. -I../.. -I../../tests/firmware -I../../../shared/uart_protocol/src
+ -I. -I../.. -I../../tests/firmware -I../../../sensor_pico/lib/uart_protocol/src
 OBJS := $(filter-out ./mtkernel_3/app_program/%,$(OBJS))
 C_DEPS := $(filter-out ./mtkernel_3/app_program/%,$(C_DEPS))
 HTTP_SRCS := main.c http_post.c http_service.c \
@@ -42,7 +42,7 @@ http-config:
 	@echo 'CFLAGS=$(CFLAGS)'
 	@echo 'ASFLAGS=$(ASFLAGS)'
 
-UART_PROTOCOL_ROOT := ../../../shared/uart_protocol
+UART_PROTOCOL_ROOT := ../../../sensor_pico/lib/uart_protocol
 UART_LIBRARY_DIR := ./mtkernel_3/combined_shared
 UART_ENDPOINTS := gateway
 include $(UART_PROTOCOL_ROOT)/library.mk

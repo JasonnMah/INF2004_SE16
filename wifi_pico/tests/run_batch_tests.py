@@ -2,7 +2,7 @@
 """Actual batching sources with modeled hardware and localhost HTTP. No Pico claim."""
 from pathlib import Path
 import hashlib,importlib.util,subprocess,sys,tempfile,threading
-W=Path(__file__).resolve().parents[1];R=W.parent;S=R/'shared/uart_protocol/src'
+W=Path(__file__).resolve().parents[1];R=W.parent;S=R/'sensor_pico/lib/uart_protocol/src'
 B=W/'course/build_make/batch_host';B.mkdir(parents=True,exist_ok=True)
 flags=['gcc','-std=c11','-Wall','-Wextra','-Werror','-g','-fsanitize=address,undefined','-fno-pie','-no-pie']
 evidence=[]

@@ -1,5 +1,5 @@
 /* Sensor-board hardware connection to the reusable UART protocol.
- * Protocol framing, ACKs and retries remain in shared/uart_protocol. */
+ * The shared library in lib/uart_protocol handles framing, ACKs and retries. */
 #ifndef SENSOR_UART_H
 #define SENSOR_UART_H
 #include "pico1/pico1_protocol.h"

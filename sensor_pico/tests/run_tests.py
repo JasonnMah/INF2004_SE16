@@ -11,8 +11,7 @@ import sys
 
 sys.dont_write_bytecode = True
 sensor = Path(__file__).resolve().parents[1]
-root = sensor.parent
-shared = root / "shared/uart_protocol/src"
+shared = sensor / "lib/uart_protocol/src"
 out = sensor / "build/host"
 stubs = out / "sdk_stubs"
 stubs.mkdir(parents=True, exist_ok=True)

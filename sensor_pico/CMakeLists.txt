@@ -10,7 +10,7 @@ project(sensor_pico C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 
 pico_sdk_init()
-add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/../shared/uart_protocol" shared_uart)
+add_subdirectory("${CMAKE_CURRENT_LIST_DIR}/lib/uart_protocol" shared_uart)
 
 add_executable(sensor_pico
     main.c

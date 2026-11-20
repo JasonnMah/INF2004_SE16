@@ -4,8 +4,8 @@ from pathlib import Path
 import json, subprocess, sys
 from compare_uart_capture import extract_capture
 w=Path(__file__).resolve().parents[1]
-r=w.parent/"uart_protocol"
-s=w.parent/"shared/uart_protocol"
+r=w/"tests/legacy_uart"
+s=w.parent/"sensor_pico/lib/uart_protocol"
 out=w/"course/build_make/uart-host-tests"
 out.mkdir(parents=True,exist_ok=True)
 sources=[w/n for n in
@@ -28,7 +28,7 @@ for fault,tests in cases.items():
         "-I"+str(s/"src"),"-I"+str(r/"src"),*map(str,test_sources),"-o",str(binary)],check=True)
     for case,length in tests:
         p=subprocess.run([str(binary),case],text=True,capture_output=True)
-        (w/"tests/evidence"/f"uart-host-{case}.log").write_text(p.stdout+p.stderr)
+        (out/f"uart-host-{case}.log").write_text(p.stdout+p.stderr)
         if p.returncode: raise SystemExit(p.stdout+p.stderr)
         data,completion=extract_capture(p.stdout)
         expected=bytes(i%256 for i in range(length))

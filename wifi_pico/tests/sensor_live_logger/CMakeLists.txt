@@ -3,12 +3,12 @@
 cmake_minimum_required(VERSION 3.13)
 get_filename_component(REPOSITORY "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
 set(PICO_BOARD pico_w CACHE STRING "Board")
-include("${REPOSITORY}/uart_protocol/pico_sdk_import.cmake")
+include("${REPOSITORY}/sensor_pico/pico_sdk_import.cmake")
 project(sensor_live_logger C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 pico_sdk_init()
 # Reuse the common protocol library instead of copying frame/CRC/retry code.
-add_subdirectory("${REPOSITORY}/shared/uart_protocol" shared_uart)
+add_subdirectory("${REPOSITORY}/sensor_pico/lib/uart_protocol" shared_uart)
 set(JZ "${REPOSITORY}/sensor_pico")
 # Read-only reuse; neither JZ's main/flash code nor the frozen reference is compiled.
 set(LIVE_SENSOR_SOURCES
