@@ -1,6 +1,11 @@
 /* Standalone, removable bare-metal Sensor integration test.
  * Reuses JZ's aht10.c and encoder.c READ ONLY and the existing shared protocol.
  * No flash, RTC, Wi-Fi, RTOS or Sensor buttons. Wi-Fi Pico buttons send commands.
+ *
+ * This file runs on the SENSOR Pico, even though it lives under wifi_pico/tests.
+ * CONFIG starts timed AHT10 readings. REQUEST_DATA sends a fixed copy of the
+ * compressed RAM log. CLEAR empties that RAM log and pauses further readings.
+ * The shared UART library builds frames, checks CRCs and handles ACKs/retries.
  */
 #include <stdio.h>
 #include <inttypes.h>
@@ -19,20 +24,26 @@
 #include "protocol/stream_parser.h"
 #include "protocol/crc16.h"
 
+/* On the Sensor board: GP4 TX -> Wi-Fi GP1 RX; GP5 RX <- Wi-Fi GP0 TX.
+ * AHT10 uses the Sensor board's GP0/GP1, which are separate from GP4/GP5. */
 #define SENSOR_UART uart1
 #define SENSOR_TX 4u
 #define SENSOR_RX 5u
 #define SENSOR_SDA 0u
 #define SENSOR_SCL 1u
 #define SESSION_ID 0x11223344u
+/* Buffer bytes during sensor waits; limit work per loop so other jobs get time. */
 #define RX_CAPACITY 512u
 #define RX_POLL_BUDGET 128u
 #define USB_SETTLE_MS 200u
 
+/* These objects live for the whole program; no memory is allocated at runtime. */
 static live_logger_t logger;
 static pico1_ctx_t endpoint;
 static stream_parser_t parser;
 static protocol_frame_t frame;
+/* The UART interrupt adds bytes at rx_head; the main loop removes at rx_tail.
+ * volatile makes the compiler reread counters that the interrupt can change. */
 static uint8_t rx[RX_CAPACITY];
 static volatile uint32_t rx_head, rx_tail, rx_errors, rx_dropped;
 static uint32_t frames_received, rejected_frames, snapshot_count;
@@ -43,18 +54,21 @@ static bool have_reading;
 static size_t dump_offset;
 static bool dumping;
 
+/* The protocol needs elapsed milliseconds for retries, not a calendar clock. */
 static uint64_t now_ms(void *context)
 {
     (void)context;
     return time_us_64() / 1000u;
 }
 
+/* Send bytes already prepared by the shared protocol; do not build frames here. */
 static void send_bytes(void *context, const uint8_t *bytes, size_t length)
 {
     (void)context;
     uart_write_blocking(SENSOR_UART, bytes, length);
 }
 
+/* UART operation must continue even when no USB Serial Monitor is open. */
 static void protocol_message(const char *text)
 {
     if (stdio_usb_connected()) printf("%s", text);
@@ -78,6 +92,7 @@ static void uart_rx_irq(void)
     }
 }
 
+/* Remove one saved UART byte without racing the receive interrupt. */
 static bool pop_byte(uint8_t *byte)
 {
     /* Single core: this short critical section protects ISR/main ownership.
@@ -89,6 +104,8 @@ static bool pop_byte(uint8_t *byte)
     return available;
 }
 
+/* Called after the protocol accepts CONFIG. Time comes from the command;
+ * this test has no external RTC. Schedule the first sample immediately. */
 static bool configure(void *context, uint32_t timestamp, uint32_t seconds)
 {
     if (!live_logger_configure(context, timestamp, seconds)) return false;
@@ -99,6 +116,8 @@ static bool configure(void *context, uint32_t timestamp, uint32_t seconds)
     return true;
 }
 
+/* A snapshot is a fixed copy of the log. Retries must send those same bytes,
+ * even if new sensor readings are added to the working log during retrieval. */
 static bool snapshot(void *context, const uint8_t **bytes, size_t *length)
 {
     dumping = false; /* A new retrieval must not mix generations in a USB dump. */
@@ -110,6 +129,8 @@ static bool snapshot(void *context, const uint8_t **bytes, size_t *length)
     return true;
 }
 
+/* READY tells the protocol it may ACK CLEAR now. This only clears RAM;
+ * a future flash version must finish and verify its erase before returning READY. */
 static pico1_storage_result_t clear_log(void *context)
 {
     if (!live_logger_clear(context)) return P1_STORAGE_ERROR;
@@ -119,6 +140,8 @@ static pico1_storage_result_t clear_log(void *context)
     return P1_STORAGE_READY;
 }
 
+/* The protocol calls this after final ACK or an abandoned transfer. Releasing
+ * the fixed copy allows another retrieval; it does not erase the working log. */
 static void release_log(void *context, bool completed)
 {
     live_logger_release(context);
@@ -126,6 +149,8 @@ static void release_log(void *context, bool completed)
         printf("[LOG] Snapshot released: %s\n", completed ? "final ACK received" : "transfer aborted");
 }
 
+/* Reused on USB connection and on 's'. A repeated START line here is a status
+ * reprint and does not by itself mean that the Pico restarted. */
 static void print_status(void)
 {
     puts("[START] Sensor live AHT10 UART test; bare-metal, RAM only");
@@ -149,6 +174,8 @@ static void print_status(void)
     puts("[USB] s + Enter: status; d + Enter: last UART snapshot hex; DTR off/on: status");
 }
 
+/* Check USB without waiting for input: 's' shows status, 'd' dumps the last
+ * retrieval copy as hex. Neither command requests a new AHT10 reading. */
 static void console_poll(void)
 {
     static bool was_connected;
@@ -197,12 +224,15 @@ static void console_poll(void)
     }
 }
 
+/* Take one reading when due. CONFIG sets the interval in seconds; this function
+ * schedules the next reading, so GP20 does not need to be pressed each time. */
 static void sample_poll(void)
 {
     uint64_t now = now_ms(NULL);
     if (!logger.running || now < next_sample_ms) return;
     int16_t temperature = 0;
     last_read_status = aht10_read_temp(i2c0, &temperature);
+    /* Keep a failed read separate from a real zero-degree temperature. */
     bool ok = last_read_status == AHT10_OK;
     bool stored = live_logger_append(&logger, ok, temperature);
     next_sample_ms = now + (uint64_t)logger.interval_seconds * 1000u;
@@ -224,6 +254,8 @@ int main(void)
     stdio_init_all();
     sleep_ms(250); /* Bounded settling only: UART never waits for a USB monitor. */
     live_logger_init(&logger);
+    /* These callbacks connect our RAM logger to the existing Sensor protocol.
+     * UART framing/reliability stays in the library, storage stays in live_logger. */
     static const pico1_backend_t backend = {
         .context = &logger, .configure = configure, .snapshot = snapshot,
         .clear_begin = clear_log, .release = release_log
@@ -232,6 +264,8 @@ int main(void)
                            .write = send_bytes, .now_ms = now_ms};
     if (!pico1_init(&endpoint, link, NULL, 0, (pico1_hooks_t){.backend = &backend})) return 1;
     stream_parser_init(&parser);
+    /* Enable UART RX before sensor initialization, so incoming bytes can be
+     * saved even while the AHT10 driver is waiting for an I2C operation. */
     uart_init(SENSOR_UART, 115200);
     gpio_set_function(SENSOR_TX, GPIO_FUNC_UART);
     gpio_set_function(SENSOR_RX, GPIO_FUNC_UART);
@@ -247,14 +281,20 @@ int main(void)
     gpio_pull_up(SENSOR_SDA);
     gpio_pull_up(SENSOR_SCL);
     init_status = aht10_init(i2c0);
+    /* A failed initialization is reported, but later scheduled reads are still
+     * attempted. Their own results determine whether a reading can be stored. */
     uint32_t observed_drops = 0;
     for (;;) {
+        /* Missing bytes make the current frame unreliable. Reset parsing and
+         * release any active transfer rather than report partial data as complete. */
         if (observed_drops != rx_dropped) {
             observed_drops = rx_dropped;
             stream_parser_init(&parser);
             pico1_abort_transfer(&endpoint);
             if (stdio_usb_connected()) printf("[UART] RX overflow: dropped=%" PRIu32 "; transfer aborted\n", observed_drops);
         }
+        /* The interrupt only collects bytes. Decode/validate complete frames
+         * here, then let the library handle the accepted command or ACK. */
         uint8_t byte;
         for (unsigned n = 0; n < RX_POLL_BUDGET && pop_byte(&byte); ++n) {
             if (!stream_parser_feed(&parser, byte)) continue;
@@ -262,6 +302,7 @@ int main(void)
             ++frames_received;
             pico1_handle_frame(&endpoint, &frame);
         }
+        /* Keep retry timers, sampling and USB responsive on every pass. */
         pico1_tick(&endpoint);
         sample_poll();
         console_poll();

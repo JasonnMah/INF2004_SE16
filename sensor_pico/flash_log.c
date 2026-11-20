@@ -79,17 +79,30 @@ flog_status_t flog_init(void) {
     return FLOG_ERR_FULL;
 }
 
+bool flog_erase_sector(uint32_t sector) {
+    uintptr_t image_end = (uintptr_t)&__flash_binary_end;
+    if (sector >= FLOG_REGION_BYTES / FLASH_SECTOR_SIZE ||
+        (image_end > (uintptr_t)XIP_BASE &&
+         image_end - (uintptr_t)XIP_BASE > FLOG_REGION_OFFSET)) return false;
+    uint32_t off = FLOG_REGION_OFFSET + sector * FLASH_SECTOR_SIZE;
+    if (!run_flash_op(do_erase, &off)) return false;
+    /* Success must mean erased bytes, not only a completed SDK call. */
+    const uint8_t *bytes = (const uint8_t *)(uintptr_t)(XIP_BASE + off);
+    for (uint32_t i = 0; i < FLASH_SECTOR_SIZE; ++i)
+        if (bytes[i] != 0xFF) return false;
+    return true;
+}
+
 bool flog_erase_all(void) {
     bool ok = true;
     for (int32_t s = (int32_t)(FLOG_REGION_BYTES / FLASH_SECTOR_SIZE) - 1; s >= 0; s--) {
-        uint32_t off = FLOG_REGION_OFFSET + (uint32_t)s * FLASH_SECTOR_SIZE;
-        if (!run_flash_op(do_erase, &off)) {
-            printf("flash: erase of sector %d failed\n", (int)s);
+        if (!flog_erase_sector((uint32_t)s)) {
+            printf("flash: erase/verification of sector %d failed\n", (int)s);
             ok = false;
         }
     }
-    cur_page = 0;
-    full = false;
+    if (ok) cur_page = 0;
+    full = !ok;
     return ok;
 }
 
@@ -122,3 +135,5 @@ bool flog_advance(void) {
 
 uint32_t flog_current_page(void) { return cur_page; }
 bool     flog_is_full(void)      { return full; }
+
+const uint8_t *flog_data(void) { return page_ptr(0); }

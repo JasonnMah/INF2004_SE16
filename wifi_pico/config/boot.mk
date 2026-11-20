@@ -1,4 +1,7 @@
 # Loaded by course Makefile before its link prerequisites are expanded.
+ifeq ($(APP_FLASH_CACHE_TEST),1)
+include ../../config/flash.mk
+else
 ifneq ($(SMP),1)
 $(error Milestone 1 requires SMP=1)
 endif
@@ -37,3 +40,4 @@ milestone1-config:
 	@echo 'ASFLAGS=$(ASFLAGS)'
 	@echo 'APPLICATION=../../tests/firmware/smp_boot_main.c'
 	@echo 'MAKEFILE_LIST=$(MAKEFILE_LIST)'
+endif

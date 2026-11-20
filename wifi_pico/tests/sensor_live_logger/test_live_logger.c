@@ -1,4 +1,6 @@
 /* Host tests of the real RAM adapter and shared UART endpoints, not hardware. */
+/* Pretend UART wires and a controllable clock connect both real protocol
+ * endpoints. Dropping selected ACKs lets us check recovery without a Pico. */
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
@@ -11,9 +13,12 @@ static live_logger_t log_data;
 static pico1_ctx_t p1;
 static pico2_ctx_t p2;
 static stream_parser_t parser[2];
+/* Side 0 receives as the Wi-Fi Pico; side 1 receives as the Sensor Pico. */
 static uint8_t wire[2][8192], received[LIVE_LOG_CAPACITY];
 static unsigned head[2], tail[2], sides[2] = {0, 1};
 static uint64_t clock_now;
+/* A lease means the Sensor protocol is borrowing one fixed snapshot. Count
+ * releases/completions to catch leaks or duplicate completion notifications. */
 static unsigned completions, leases, releases, configurations, end_acks;
 static bool drop_first_end, drop_data_acks;
 
@@ -33,12 +38,15 @@ static void release(void *context, bool completed)
 { (void)completed; ++releases; live_logger_release(context); }
 static pico1_storage_result_t clear(void *context)
 { return live_logger_clear(context) ? P1_STORAGE_READY : P1_STORAGE_ERROR; }
+/* Connect the same RAM functions used by main.c to the real Sensor endpoint. */
 static const pico1_backend_t backend = {
     .context = &log_data, .configure = configure, .snapshot = snapshot,
     .clear_begin = clear, .release = release
 };
 static void complete(pico2_ctx_t *endpoint)
 { assert(endpoint->received_log_valid); ++completions; }
+/* Replace the hardware UART write. Normally deliver bytes to the other side;
+ * selected tests discard ACKs to imitate loss on the physical connection. */
 static void transmit(void *context, const uint8_t *bytes, size_t length)
 {
     unsigned side = *(unsigned *)context;
@@ -56,6 +64,8 @@ static void transmit(void *context, const uint8_t *bytes, size_t length)
         wire[1u-side][head[1u-side]++ % sizeof(wire[0])] = bytes[i];
     }
 }
+/* Deliver queued bytes and advance both retry timers in 10 ms steps. Simulated
+ * time makes timeout tests repeatable without waiting that long in real time. */
 static void pump(unsigned milliseconds)
 {
     for (unsigned n = 0; n < milliseconds; n += 10) {
@@ -74,6 +84,7 @@ static void pump(unsigned milliseconds)
         clock_now += 10;
     }
 }
+/* Start each protocol scenario from a clean logger and a successful CONFIG. */
 static void init_pair(void)
 {
     live_logger_init(&log_data);
@@ -92,6 +103,8 @@ static void init_pair(void)
     assert(pico2_send_config(&p2)); pump(100);
     assert(p1.configured && log_data.running && p2.state == P2_COMPLETE);
 }
+/* Exercise interval limits, then write two sealed pages for run_tests.py to
+ * decode: changing temperatures, one missing reading and repeated readings. */
 static void save_fixture(const char *path)
 {
     live_logger_init(&log_data);
@@ -99,6 +112,7 @@ static void save_fixture(const char *path)
     assert(live_logger_append(&log_data, true, 3000));
     static live_logger_t before;
     before = log_data;
+    /* Invalid CONFIG values must not partially change an existing valid log. */
     const uint32_t invalid[] = {0, 1, 59, 61, 4096u * 60u, UINT32_MAX};
     for (unsigned i = 0; i < sizeof(invalid) / sizeof(invalid[0]); ++i) {
         assert(!live_logger_configure(&log_data, 1700000000, invalid[i]));
@@ -126,6 +140,8 @@ static void save_fixture(const char *path)
     assert(live_logger_snapshot(&log_data, &bytes, &length) && length == 0);
     live_logger_release(&log_data);
 }
+/* Assertions are the pass/fail checks. Any failed condition stops the test;
+ * the final PASS message is reached only after all scenarios succeed. */
 int main(int argc, char **argv)
 {
     assert(argc == 2);

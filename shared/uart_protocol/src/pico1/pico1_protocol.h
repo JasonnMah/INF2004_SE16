@@ -51,6 +51,7 @@ typedef struct
     pico1_transfer_state_t transfer_state;
     uint16_t current_block;
     uint16_t total_blocks;
+    uint32_t last_data_ack_timeout_ms; /* Opt-in batch boundary; zero retains 500 ms. */
     pending_tx_t pending_transfer;
 
     const uint8_t *logger_data;

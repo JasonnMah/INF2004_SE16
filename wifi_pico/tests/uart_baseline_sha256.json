@@ -1,9 +1,8 @@
 {
   "uart_protocol\\.gitignore": "2602bcd9faf72ad623c6b3cb53960826b9fd0acb304e4693c9560cb426ac4f32",
-  "uart_protocol\\CMakeLists.txt": "7f5d3be9fe6f09088ce0c183b5847260a5eba4c90c3987776be739bd73b21a8b",
+  "uart_protocol\\CMakeLists.txt": "7d0c0443e55c7d8f1cc1f5287cc2c80dcd5759c743b8e96030ade6aeb4a8eb84",
   "uart_protocol\\diagram.json": "ed0f76c422882ce92550b0e61fd62e98512e07b71d36c0d985025c13a4121933",
   "uart_protocol\\pico_sdk_import.cmake": "8487a38ed07af12cd8908fd6766bf0e045896fc60f855e8d06ace3b93abfc514",
-  "uart_protocol\\README.md": "aea7573836cd9f7e71d4ff03361032b69f82bc69b8fa5cb7779c20036b737145",
   "uart_protocol\\REFACTOR_TEST_RESULTS.md": "868f7f6522f33d0336925d93b98805828e6e00e62d53d6e9f354f18fb32137ad",
   "uart_protocol\\wokwi.toml": "8a004f684c030fa9efc28b8f8e48306411ff1e5b89d2769ced10e8485f96f6db",
   "uart_protocol\\cmake\\PICO_SDK_LICENSE.txt": "483f865953435b66c443dee7558debe3cc3cf8fcbb6a112fd9fc6a795d53f1f6",

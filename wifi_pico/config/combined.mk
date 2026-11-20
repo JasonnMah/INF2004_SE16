@@ -6,20 +6,30 @@ ifneq ($(filter 1,$(WIFI_STATIC) $(WIFI_DNS) $(WIFI_UDP) $(WIFI_TCP) $(WIFI_TCPB
 $(error Do not include upstream network qualification/echo applications in HTTP test)
 endif
 HTTP_BUILD_CHECK ?= 0
-ifneq ($(PROFILE_ID),inf2004-combined-smp1-check$(HTTP_BUILD_CHECK)-v1)
+APP_BATCHED ?= 0
+ifeq ($(APP_BATCHED),1)
+BATCH_PROFILE := batched
+LNKFILE := ../../config/flash_map.ld
+else
+BATCH_PROFILE := combined
+endif
+ifneq ($(PROFILE_ID),inf2004-$(BATCH_PROFILE)-smp1-check$(HTTP_BUILD_CHECK)-v1)
 $(error Use build.ps1 -Target combined to select an isolated object profile)
 endif
-EXE_FILE := wifi_pico_combined
+EXE_FILE := wifi_pico_$(BATCH_PROFILE)
 ifeq ($(HTTP_BUILD_CHECK),1)
 EXE_FILE := $(EXE_FILE)_buildcheck
 endif
-CFLAGS += -DAPP_COMBINED=1 -DTM_APP_HTTP=1 -DHTTP_BUILD_CHECK=$(HTTP_BUILD_CHECK) -DTM_CONSOLE_UART=0 \
+CFLAGS += -DAPP_BATCHED=$(APP_BATCHED) -DAPP_COMBINED=1 -DTM_APP_HTTP=1 -DHTTP_BUILD_CHECK=$(HTTP_BUILD_CHECK) -DTM_CONSOLE_UART=0 \
  -DAPP_SENSOR_EMULATOR=0 -include ../../config/project.h \
  -I. -I../.. -I../../tests/firmware -I../../../shared/uart_protocol/src
 OBJS := $(filter-out ./mtkernel_3/app_program/%,$(OBJS))
 C_DEPS := $(filter-out ./mtkernel_3/app_program/%,$(C_DEPS))
 HTTP_SRCS := main.c http_post.c http_service.c \
  kernel_io.c rx_ring.c buttons.c status.c ui.c communication.c uart_io.c lab_capture.c upload.c log_workflow.c log_id.c
+ifeq ($(APP_BATCHED),1)
+HTTP_SRCS := $(filter-out communication.c lab_capture.c log_workflow.c,$(HTTP_SRCS))  batch_communication.c batch_gateway.c batch_store.c flash_port.c
+endif
 HTTP_OBJS := $(addprefix ./mtkernel_3/http_app/,$(HTTP_SRCS:.c=.o))
 OBJS += $(HTTP_OBJS)
 C_DEPS += $(HTTP_OBJS:.o=.d)

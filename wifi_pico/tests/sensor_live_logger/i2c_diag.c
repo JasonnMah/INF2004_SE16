@@ -1,6 +1,10 @@
 /* Optional diagnostic only. Linker wrappers keep JZ's source and return values
  * unchanged. Capture during init, report later: no USB wait/print on the bus path.
  * Do not wrap i2c_*_timeout_us: those helpers are inline in SDK 2.2.0.
+ *
+ * CMake's --wrap option redirects the named calls through these functions.
+ * Each wrapper still calls the original function and returns its actual result.
+ * The diagnostic observes the startup warning; it does not fix or hide it.
  */
 #include <stdio.h>
 #include <string.h>
@@ -10,9 +14,12 @@
 #include "aht10.h"
 #include "i2c_diag.h"
 
+/* Store only a few startup transactions, keeping RAM use fixed and small. */
 #define INIT_RECORDS 4u
 #define CAPTURE_BYTES 6u
 
+/* requested is how many bytes the driver asked for; result is the count or
+ * negative error code actually returned. captured limits the bytes we display. */
 typedef struct {
     bool write;
     uint8_t address, bytes[CAPTURE_BYTES];
@@ -26,12 +33,14 @@ static unsigned record_count;
 static bool capturing, initial_sda, initial_scl;
 static aht10_status_t init_result;
 
+/* The linker supplies __real_* names for the original functions. */
 extern aht10_status_t __real_aht10_init(i2c_inst_t *i2c);
 extern int __real_i2c_write_blocking_until(i2c_inst_t *i2c, uint8_t address,
     const uint8_t *bytes, size_t length, bool nostop, absolute_time_t until);
 extern int __real_i2c_read_blocking_until(i2c_inst_t *i2c, uint8_t address,
     uint8_t *bytes, size_t length, bool nostop, absolute_time_t until);
 
+/* Ignore normal measurements: recording is enabled only inside aht10_init(). */
 static init_record_t *begin_record(bool write, uint8_t address, size_t length)
 {
     if (!capturing || record_count == INIT_RECORDS) return NULL;
@@ -46,6 +55,7 @@ static void capture_bytes(init_record_t *record, const uint8_t *bytes, size_t le
     memcpy(record->bytes, bytes, record->captured);
 }
 
+/* Save the bus pin levels before initialization, then record only that call. */
 aht10_status_t __wrap_aht10_init(i2c_inst_t *i2c)
 {
     record_count = 0;
@@ -57,6 +67,8 @@ aht10_status_t __wrap_aht10_init(i2c_inst_t *i2c)
     return init_result;
 }
 
+/* For writes, save the intended bytes before calling the real driver. This
+ * reveals a partial write, such as one returned byte when three were expected. */
 int __wrap_i2c_write_blocking_until(i2c_inst_t *i2c, uint8_t address,
     const uint8_t *bytes, size_t length, bool nostop, absolute_time_t until)
 {
@@ -71,6 +83,8 @@ int __wrap_i2c_write_blocking_until(i2c_inst_t *i2c, uint8_t address,
     return result;
 }
 
+/* For reads, save only bytes the driver reports receiving. Unread buffer bytes
+ * must not be presented as real sensor data. */
 int __wrap_i2c_read_blocking_until(i2c_inst_t *i2c, uint8_t address,
     uint8_t *bytes, size_t length, bool nostop, absolute_time_t until)
 {
@@ -85,6 +99,8 @@ int __wrap_i2c_read_blocking_until(i2c_inst_t *i2c, uint8_t address,
     return result;
 }
 
+/* Print saved results after initialization. Reprinting the report does not
+ * resend I2C commands or reset the AHT10. */
 void sensor_i2c_trace_report(void)
 {
     printf("[I2C INIT] Saved startup trace; SDA=%u SCL=%u before reset\n",

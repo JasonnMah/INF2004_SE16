@@ -1,7 +1,51 @@
 Host tests only; physical Pico/HTTP: NOT TESTED
+PASS cache: pending batch survives restart; confirmation precedes reuse; no boot erase
+PASS cache: all 256 batches of a 1 MiB log, including journal rotation
+PASS cache: power-cut model at every operation; torn pages are never acknowledged as READY
+PASS cache: receipt/cleanup interruption, short/empty batches and corruption detection
+test_csv_runs_only_after_full_log_and_survives_receiver_restart (__main__.BatchTests.test_csv_runs_only_after_full_log_and_survives_receiver_restart) ... [BATCH] stored: offset=0 bytes=4096 total=4352 complete=0
+[BATCH] stored: offset=4096 bytes=256 total=4352 complete=1
+[PC] Complete log verified: bytes=4352 file=/tmp/tmp0hahihx5/aa9fd761d210ec552e90f30c676c71100569b6b1394baa7f794e6b98420ca6eb.bin
+[CSV] samples=1 file=/tmp/tmp0hahihx5/aa9fd761d210ec552e90f30c676c71100569b6b1394baa7f794e6b98420ca6eb.csv
+[CSV] Download: /logs/aa9fd761d210ec552e90f30c676c71100569b6b1394baa7f794e6b98420ca6eb.csv
+ok
+test_full_one_mib_backend_without_whole_log_http_request (__main__.BatchTests.test_full_one_mib_backend_without_whole_log_http_request) ... ok
+test_limits_damage_and_empty (__main__.BatchTests.test_limits_damage_and_empty) ... [BATCH] Rejected: invalid batch offset
+[BATCH] Rejected: invalid batch offset
+[BATCH] Rejected: batch body does not match its position and total
+[BATCH] Rejected: invalid batch identity or total length
+[BATCH] Rejected: complete log SHA256 mismatch; fragments retained
+[BATCH] stored: offset=0 bytes=0 total=0 complete=1
+[PC] Complete log verified: bytes=0 file=/tmp/tmp86u2yvne/f8f3a65f6b8256bb6422a00ddeb050cf5b81de71112d94714b76f97f4cacbe37.bin
+[BATCH] duplicate: offset=0 bytes=0 total=0 complete=1
+[PC] Complete log verified: bytes=0 file=/tmp/tmp86u2yvne/f8f3a65f6b8256bb6422a00ddeb050cf5b81de71112d94714b76f97f4cacbe37.bin
+ok
+test_lost_receipt_and_conflicts (__main__.BatchTests.test_lost_receipt_and_conflicts) ... [BATCH] stored: offset=0 bytes=4096 total=8192 complete=0
+[PC TEST] Receipt dropped once; stored batch retained
+[BATCH] duplicate: offset=0 bytes=4096 total=8192 complete=0
+[BATCH] Rejected: batch identity reused with different bytes
+[BATCH] Rejected: log identity reused with different metadata
+[BATCH] stored: offset=4096 bytes=4096 total=8192 complete=1
+[PC] Complete log verified: bytes=8192 file=/tmp/tmp8tvdehg3/99895cf85ca82cb2585659bc8e24296e714dc27e44c4a843429e29f646551019.bin
+ok
+test_restart_duplicates_partial_tail_and_complete_hash (__main__.BatchTests.test_restart_duplicates_partial_tail_and_complete_hash) ... [BATCH] stored: offset=0 bytes=4096 total=8452 complete=0
+[BATCH] duplicate: offset=0 bytes=4096 total=8452 complete=0
+[BATCH] stored: offset=8192 bytes=260 total=8452 complete=0
+[BATCH] stored: offset=4096 bytes=4096 total=8452 complete=1
+[PC] Complete log verified: bytes=8452 file=/tmp/tmp0gkmczvg/17444863eb62f5c5b1478e323b489eca93cb8e3d0c0b8399733b0a7663040295.bin
+[BATCH] duplicate: offset=8192 bytes=260 total=8452 complete=1
+[PC] Complete log verified: bytes=8452 file=/tmp/tmp0gkmczvg/17444863eb62f5c5b1478e323b489eca93cb8e3d0c0b8399733b0a7663040295.bin
+ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 6.225s
+
+OK
+PASS flash buttons: 60 ms taps at 10/20 ms sampling, hold/release, bounce, jitter and uptime wrap
 PASS actual Wi-Fi application poll: latched DHCP timeout cannot flood after recovery; real offline errors remain visible once
 PASS upload owner still receives every ready/offline poll; UART/HTTP policies unchanged
-PASS Wi-Fi retry policy: outer bounds/cancellation/wrap; early NONET pacing and fixed 30-second deadline
+PASS actual Wi-Fi application poll: retries past attempt three at two-second gaps; in-flight scans and recovered links are not restarted
+PASS Wi-Fi retry policy: 1000 attempts, cancellation, saturated count and clock wrap; two-second pacing and fixed 30-second deadline
 PASS fragmented receipt, partial writes and exact 1024 binary bytes
 PASS lost reply retry uses identical ID/body, freed-PCB safety, duplicate receipt
 PASS connect timeout exhausts three attempts
@@ -14,6 +58,7 @@ PASS uptime wraparound
 PASS TCP immediate failure bounded
 PASS generic binary body, mismatched receipt length, empty body and invalid ID rejection
 PASS PC configuration GET: fragmented headers, 1/4095 bounds, timestamp overflow, framing, retries, no defaults and POST isolation
+PASS batch HTTP: zero/full body, whole-log header, exact binary and legacy request isolation
 HTTP client host tests PASS (no hardware/network claim)
 test_actual_c_encoder_multi_page_fixture (__main__.CsvTests.test_actual_c_encoder_multi_page_fixture) ... ok
 test_bad_crc_including_sensor_error_rejected (__main__.CsvTests.test_bad_crc_including_sensor_error_rejected) ... ok
@@ -37,7 +82,7 @@ test_unknown_metadata_or_hidden_padding_data_rejected (__main__.CsvTests.test_un
 test_wrong_format_and_zero_interval_rejected (__main__.CsvTests.test_wrong_format_and_zero_interval_rejected) ... ok
 
 ----------------------------------------------------------------------
-Ran 20 tests in 0.573s
+Ran 20 tests in 1.073s
 
 OK
 test_binary_retry_and_persistent_dedup (__main__.ReceiverTests.test_binary_retry_and_persistent_dedup) ... [PC] stored: ID=pico-known-1024-v1 bytes=1024 sha256=785b0751fc2c53dc14a4ce3d800e69ef9ce1009eb327ccf458afe09c242c26c9
@@ -50,16 +95,16 @@ test_concurrent_retries (__main__.ReceiverTests.test_concurrent_retries) ... [PC
 [PC] duplicate: ID=pico-known-1024-v1 bytes=1024 sha256=785b0751fc2c53dc14a4ce3d800e69ef9ce1009eb327ccf458afe09c242c26c9
 ok
 test_csv_concurrent_duplicate_uploads (__main__.ReceiverTests.test_csv_concurrent_duplicate_uploads) ... [PC] stored: ID=log-2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec bytes=256 sha256=2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec
-[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmptnf0qdnm/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
+[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmpu5qdhkcz/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
 [CSV] Download: /logs/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
 [PC] duplicate: ID=log-2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec bytes=256 sha256=2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec
-[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmptnf0qdnm/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
+[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmpu5qdhkcz/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
 [CSV] Download: /logs/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
 [PC] duplicate: ID=log-2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec bytes=256 sha256=2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec
-[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmptnf0qdnm/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
+[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmpu5qdhkcz/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
 [CSV] Download: /logs/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
 [PC] duplicate: ID=log-2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec bytes=256 sha256=2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec
-[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmptnf0qdnm/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
+[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmpu5qdhkcz/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
 [CSV] Download: /logs/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
 ok
 test_csv_damage_or_wrong_format_keeps_raw_binary (__main__.ReceiverTests.test_csv_damage_or_wrong_format_keeps_raw_binary) ... [PC] stored: ID=invalid-0 bytes=3 sha256=2f05d4b689d270cafb02285f35f44866f7dc8a2d368a3f9d1124373eeab31fb1
@@ -67,45 +112,127 @@ test_csv_damage_or_wrong_format_keeps_raw_binary (__main__.ReceiverTests.test_cs
 [PC] stored: ID=invalid-1 bytes=256 sha256=c29daa6684ba47e3c52fe9ef133af8deeaad06682d7146ad62e7afb91a9fc9ba
 [CSV] Not exported: page 0: unknown metadata type 5; binary preserved
 ok
+test_csv_deleted_file_does_not_reuse_its_number (__main__.ReceiverTests.test_csv_deleted_file_does_not_reuse_its_number) ... [PC] stored: ID=log-2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec bytes=256 sha256=2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec
+[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmp7778gydu/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
+[CSV] Download: /logs/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
+[PC] stored: ID=next-log bytes=256 sha256=2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec
+[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmp7778gydu/3896766458a6888f317ff753e56e3ae71811738c03c273a9fa5e005afd3fce6f.csv
+[CSV] Download: /logs/3896766458a6888f317ff753e56e3ae71811738c03c273a9fa5e005afd3fce6f.csv
+[PC] duplicate: ID=log-2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec bytes=256 sha256=2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec
+[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmp7778gydu/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
+[CSV] Download: /logs/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
+ok
 test_csv_disk_error_does_not_undo_binary_receipt (__main__.ReceiverTests.test_csv_disk_error_does_not_undo_binary_receipt) ... [PC] stored: ID=log-2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec bytes=256 sha256=2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec
 [CSV] Not exported: simulated CSV disk error; binary preserved
 ok
 test_csv_download_from_real_capture (__main__.ReceiverTests.test_csv_download_from_real_capture) ... [PC] stored: ID=log-2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec bytes=256 sha256=2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec
-[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmpxnjhddov/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
+[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmpodqjwrf0/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
 [CSV] Download: /logs/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
 ok
 test_csv_download_rejects_other_files_and_paths (__main__.ReceiverTests.test_csv_download_rejects_other_files_and_paths) ... ok
+test_csv_existing_files_get_names_without_renaming (__main__.ReceiverTests.test_csv_existing_files_get_names_without_renaming) ... ok
 test_csv_lost_receipt_dedup_and_missing_csv_recovery (__main__.ReceiverTests.test_csv_lost_receipt_dedup_and_missing_csv_recovery) ... [PC] stored: ID=log-2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec bytes=256 sha256=2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec
-[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmpde_hm6c7/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
+[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmpqwxugc9r/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
 [CSV] Download: /logs/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
 [PC TEST] Receipt dropped once; stored bytes retained
 [PC] duplicate: ID=log-2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec bytes=256 sha256=2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec
-[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmpde_hm6c7/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
+[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmpqwxugc9r/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
 [CSV] Download: /logs/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
 [PC] duplicate: ID=log-2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec bytes=256 sha256=2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec
-[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmpde_hm6c7/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
+[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmpqwxugc9r/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
 [CSV] Download: /logs/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
+ok
+test_csv_naming_error_preserves_binary_receipt (__main__.ReceiverTests.test_csv_naming_error_preserves_binary_receipt) ... [PC] stored: ID=log-2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec bytes=256 sha256=2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec
+[CSV] Not exported: index disk error; binary preserved
+ok
+test_csv_numbered_downloads_and_numeric_page_order (__main__.ReceiverTests.test_csv_numbered_downloads_and_numeric_page_order) ... [PC] stored: ID=numbered-log-1 bytes=256 sha256=2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec
+[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmpo1otvtwt/badb6a0224e5d408428046222215366c99c090029b1daa8accc9c646452c74bd.csv
+[CSV] Download: /logs/badb6a0224e5d408428046222215366c99c090029b1daa8accc9c646452c74bd.csv
+[PC] stored: ID=numbered-log-2 bytes=256 sha256=2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec
+[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmpo1otvtwt/2f878ccd29db9c84d987a09b371227a9f06fde3f2f9ccbe5f7ef3a4a619d917d.csv
+[CSV] Download: /logs/2f878ccd29db9c84d987a09b371227a9f06fde3f2f9ccbe5f7ef3a4a619d917d.csv
+[PC] stored: ID=numbered-log-3 bytes=256 sha256=2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec
+[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmpo1otvtwt/26220e99e0c7f5fa76a3bc7b86454c393c34d397fd4300bd323e2be4e853897d.csv
+[CSV] Download: /logs/26220e99e0c7f5fa76a3bc7b86454c393c34d397fd4300bd323e2be4e853897d.csv
+[PC] stored: ID=numbered-log-4 bytes=256 sha256=2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec
+[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmpo1otvtwt/1dfc66a6fe51455c33fb160896973bdc4fe7476ffe5f09aa7c997469bbe0acf2.csv
+[CSV] Download: /logs/1dfc66a6fe51455c33fb160896973bdc4fe7476ffe5f09aa7c997469bbe0acf2.csv
+[PC] stored: ID=numbered-log-5 bytes=256 sha256=2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec
+[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmpo1otvtwt/fc6b04c1b1dd07e46ab5eb499bda2b4d83a97dd02bf5659b3b4363a6a9a76aba.csv
+[CSV] Download: /logs/fc6b04c1b1dd07e46ab5eb499bda2b4d83a97dd02bf5659b3b4363a6a9a76aba.csv
+[PC] stored: ID=numbered-log-6 bytes=256 sha256=2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec
+[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmpo1otvtwt/5fb48f198980aa8de2215d5f1b30369c86280b18f6801f1d7a9f59f9f83fe90e.csv
+[CSV] Download: /logs/5fb48f198980aa8de2215d5f1b30369c86280b18f6801f1d7a9f59f9f83fe90e.csv
+[PC] stored: ID=numbered-log-7 bytes=256 sha256=2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec
+[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmpo1otvtwt/2265a2f0c66f890cf5cc2bacee2637a4bbd96ecab271fe0b916c6b33f593a37f.csv
+[CSV] Download: /logs/2265a2f0c66f890cf5cc2bacee2637a4bbd96ecab271fe0b916c6b33f593a37f.csv
+[PC] stored: ID=numbered-log-8 bytes=256 sha256=2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec
+[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmpo1otvtwt/6fcf255bd2e46ade41f6e3a986d36b0858ef69e77653cb77e60aaf0d3390286c.csv
+[CSV] Download: /logs/6fcf255bd2e46ade41f6e3a986d36b0858ef69e77653cb77e60aaf0d3390286c.csv
+[PC] stored: ID=numbered-log-9 bytes=256 sha256=2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec
+[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmpo1otvtwt/c399f6e0808ced27a6cf78eaba943843e466e58fcd3d9ae2829cc796753df6e9.csv
+[CSV] Download: /logs/c399f6e0808ced27a6cf78eaba943843e466e58fcd3d9ae2829cc796753df6e9.csv
+[PC] stored: ID=numbered-log-10 bytes=256 sha256=2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec
+[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmpo1otvtwt/7a6ae75340552fcdc4c90f4ce431f5e798a4b95d1d55ee85f0ff268db7a8f38b.csv
+[CSV] Download: /logs/7a6ae75340552fcdc4c90f4ce431f5e798a4b95d1d55ee85f0ff268db7a8f38b.csv
+[PC] stored: ID=numbered-log-11 bytes=256 sha256=2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec
+[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmpo1otvtwt/9ff8974689673622153d71c2f41f42afa9acab7a6cd1d552a4b34ced85350f88.csv
+[CSV] Download: /logs/9ff8974689673622153d71c2f41f42afa9acab7a6cd1d552a4b34ced85350f88.csv
+[PC] stored: ID=numbered-log-12 bytes=256 sha256=2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec
+[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmpo1otvtwt/af1cf26d0292decc4d4a1ccc4be102bad243e6ddab844395cd13fb957702fae2.csv
+[CSV] Download: /logs/af1cf26d0292decc4d4a1ccc4be102bad243e6ddab844395cd13fb957702fae2.csv
+[PC] duplicate: ID=numbered-log-1 bytes=256 sha256=2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec
+[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmpo1otvtwt/badb6a0224e5d408428046222215366c99c090029b1daa8accc9c646452c74bd.csv
+[CSV] Download: /logs/badb6a0224e5d408428046222215366c99c090029b1daa8accc9c646452c74bd.csv
+ok
+test_csv_numbers_survive_restart (__main__.ReceiverTests.test_csv_numbers_survive_restart) ... [PC] stored: ID=log-2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec bytes=256 sha256=2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec
+[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmp52fdep4m/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
+[CSV] Download: /logs/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
+[PC] duplicate: ID=log-2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec bytes=256 sha256=2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec
+[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmp52fdep4m/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
+[CSV] Download: /logs/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
+[PC] stored: ID=second-log bytes=256 sha256=2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec
+[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmp52fdep4m/e43e0a00dd27d15c24f5c90cf424eedb011dd448fa2ae5352870405982d9be6e.csv
+[CSV] Download: /logs/e43e0a00dd27d15c24f5c90cf424eedb011dd448fa2ae5352870405982d9be6e.csv
+ok
+test_csv_receipt_date_not_sample_download_or_retry_date (__main__.ReceiverTests.test_csv_receipt_date_not_sample_download_or_retry_date) ... [PC] stored: ID=log-2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec bytes=256 sha256=2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec
+[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmpps825pnd/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
+[CSV] Download: /logs/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
+[PC] duplicate: ID=log-2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec bytes=256 sha256=2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec
+[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmpps825pnd/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
+[CSV] Download: /logs/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
+ok
+test_csv_receipt_date_singapore_midnight_and_old_index_migration (__main__.ReceiverTests.test_csv_receipt_date_singapore_midnight_and_old_index_migration) ... [PC] stored: ID=log-2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec bytes=256 sha256=2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec
+[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmpayi1nemr/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
+[CSV] Download: /logs/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
+[PC] stored: ID=after-midnight bytes=256 sha256=2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec
+[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmpayi1nemr/51d190a751a52d37d26bb358b0de663e743fd74c8db304b45e7c4944cb931b89.csv
+[CSV] Download: /logs/51d190a751a52d37d26bb358b0de663e743fd74c8db304b45e7c4944cb931b89.csv
 ok
 test_downloads_off_by_default_and_known_mode_separate (__main__.ReceiverTests.test_downloads_off_by_default_and_known_mode_separate) ... ok
 test_interval12_http_csv_lost_receipt_and_legacy_mismatch (__main__.ReceiverTests.test_interval12_http_csv_lost_receipt_and_legacy_mismatch) ... [PC] stored: ID=new-format-log bytes=256 sha256=91c73484bfa1fdcdba79c658651766ac6f0039be9af60dd9a8ea33ebb9c4a292
-[CSV] samples=2 timestamps=simulated format=interval12 file=/tmp/tmpx1dvb7ku/181004cc7d29a8217d1f1b213d58657ea5b765974ec970638a238d8e0dae4d6f.csv
+[CSV] samples=2 timestamps=simulated format=interval12 file=/tmp/tmphew96anx/181004cc7d29a8217d1f1b213d58657ea5b765974ec970638a238d8e0dae4d6f.csv
 [CSV] Download: /logs/181004cc7d29a8217d1f1b213d58657ea5b765974ec970638a238d8e0dae4d6f.csv
 [PC TEST] Receipt dropped once; stored bytes retained
 [PC] duplicate: ID=new-format-log bytes=256 sha256=91c73484bfa1fdcdba79c658651766ac6f0039be9af60dd9a8ea33ebb9c4a292
-[CSV] samples=2 timestamps=simulated format=interval12 file=/tmp/tmpx1dvb7ku/181004cc7d29a8217d1f1b213d58657ea5b765974ec970638a238d8e0dae4d6f.csv
+[CSV] samples=2 timestamps=simulated format=interval12 file=/tmp/tmphew96anx/181004cc7d29a8217d1f1b213d58657ea5b765974ec970638a238d8e0dae4d6f.csv
 [CSV] Download: /logs/181004cc7d29a8217d1f1b213d58657ea5b765974ec970638a238d8e0dae4d6f.csv
 [PC] stored: ID=log-2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec bytes=256 sha256=2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec
 [CSV] Not exported: page 0: TIMEBASE must be followed by an anchor; binary preserved
 ok
 test_interval_form_bounds_and_no_automatic_command (__main__.ReceiverTests.test_interval_form_bounds_and_no_automatic_command) ... [CONFIG] Saved interval=1 minutes; press Wi-Fi GP20 to apply
-[CONFIG] GP20 fetch: interval=1 minutes timestamp=1793792243 (PC clock)
+[CONFIG] GP20 fetch: interval=1 minutes timestamp=1795007593 (PC clock)
 [CONFIG] Saved interval=4095 minutes; press Wi-Fi GP20 to apply
-[CONFIG] GP20 fetch: interval=4095 minutes timestamp=1793792243 (PC clock)
+[CONFIG] GP20 fetch: interval=4095 minutes timestamp=1795007593 (PC clock)
 ok
 test_invalid_interval_does_not_replace_saved_setting (__main__.ReceiverTests.test_invalid_interval_does_not_replace_saved_setting) ... [CONFIG] Saved interval=2 minutes; press Wi-Fi GP20 to apply
-[CONFIG] GP20 fetch: interval=2 minutes timestamp=1793792243 (PC clock)
+[CONFIG] GP20 fetch: interval=2 minutes timestamp=1795007593 (PC clock)
 ok
 test_invalid_requests (__main__.ReceiverTests.test_invalid_requests) ... ok
+test_invalid_saved_csv_receipt_date_does_not_renumber (__main__.ReceiverTests.test_invalid_saved_csv_receipt_date_does_not_renumber) ... [PC] stored: ID=log-2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec bytes=256 sha256=2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec
+[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmp4qn4g_yu/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
+[CSV] Download: /logs/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
+ok
 test_key_collision_different_bytes (__main__.ReceiverTests.test_key_collision_different_bytes) ... [PC] stored: ID=pico-known-1024-v1 bytes=1024 sha256=785b0751fc2c53dc14a4ce3d800e69ef9ce1009eb327ccf458afe09c242c26c9
 ok
 test_known_comparison (__main__.ReceiverTests.test_known_comparison) ... [PC] FAIL: known-byte comparison mismatch
@@ -116,14 +243,14 @@ test_lost_reply_after_storage (__main__.ReceiverTests.test_lost_reply_after_stor
 [PC] duplicate: ID=pico-known-1024-v1 bytes=1024 sha256=785b0751fc2c53dc14a4ce3d800e69ef9ce1009eb327ccf458afe09c242c26c9
 ok
 test_real_c_client_with_csv_and_lost_receipt (__main__.ReceiverTests.test_real_c_client_with_csv_and_lost_receipt) ... [PC] stored: ID=log-2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec bytes=256 sha256=2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec
-[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmphoguobfe/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
+[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmp5dps59xb/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
 [CSV] Download: /logs/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
 [PC] duplicate: ID=log-2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec bytes=256 sha256=2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec
-[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmphoguobfe/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
+[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmp5dps59xb/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
 [CSV] Download: /logs/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
 [PC TEST] Receipt dropped once; stored bytes retained
 [PC] duplicate: ID=log-2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec bytes=256 sha256=2b54ff11296595b9e593c9231450c52bcbe2cd8280ceacd93d5f3c50ae5fffec
-[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmphoguobfe/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
+[CSV] samples=2 timestamps=simulated format=legacy16 file=/tmp/tmp5dps59xb/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
 [CSV] Download: /logs/7fe2ccdf51f64e9bb547d7fe6d8856aede7e28fded7a30a22a175d6d4db92f50.csv
 ok
 test_real_c_config_client_uses_pc_headers (__main__.ReceiverTests.test_real_c_config_client_uses_pc_headers) ... [CONFIG] Saved interval=4095 minutes; press Wi-Fi GP20 to apply
@@ -143,6 +270,6 @@ ok
 test_truncated_body_and_duplicate_length (__main__.ReceiverTests.test_truncated_body_and_duplicate_length) ... ok
 
 ----------------------------------------------------------------------
-Ran 21 tests in 18.626s
+Ran 29 tests in 31.011s
 
 OK

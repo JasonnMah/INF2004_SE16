@@ -1,6 +1,10 @@
+/* Store compressed readings in bounded RAM and provide a stable UART copy.
+ * Hardware reads happen in main.c; compression is delegated to JZ's encoder.
+ * This implementation does not save data across power loss. */
 #include "live_logger.h"
 #include <string.h>
 
+/* Clear data, counters and flags, then prepare an empty encoder page. */
 void live_logger_init(live_logger_t *logger)
 {
     memset(logger, 0, sizeof(*logger));
@@ -13,6 +17,8 @@ bool live_logger_configure(live_logger_t *logger, uint32_t timestamp, uint32_t s
      * cannot represent instead of silently rounding it or changing the codec. */
     if (!seconds || seconds % 60u || seconds / 60u > ENC_MAX_INTERVAL_MINUTES ||
         logger->full || logger->snapshot_held) return false;
+    /* Keep old readings. The next good reading starts a new TIMEBASE record
+     * containing the updated time and interval, followed by a temperature anchor. */
     logger->timestamp = timestamp;
     logger->interval_seconds = seconds;
     logger->need_timebase = true;
@@ -20,6 +26,7 @@ bool live_logger_configure(live_logger_t *logger, uint32_t timestamp, uint32_t s
     return true;
 }
 
+/* Finish a full page with its CHECK record and move it into saved RAM pages. */
 static bool advance_page(live_logger_t *logger)
 {
     /* Reserve room for the next current page before moving this one. On full,
@@ -36,6 +43,8 @@ static bool advance_page(live_logger_t *logger)
     return true;
 }
 
+/* Let the existing encoder choose a time/anchor, temperature delta or error
+ * record. The UART layer treats all of these as ordinary compressed bytes. */
 static enc_result_t encode_reading(live_logger_t *logger, bool ok, int16_t temperature)
 {
     if (!ok) return enc_put_error(&logger->current);
@@ -45,6 +54,8 @@ static enc_result_t encode_reading(live_logger_t *logger, bool ok, int16_t tempe
     return enc_put_sample(&logger->current, temperature);
 }
 
+/* Try the current page first. If full, save it and try the same reading once
+ * on a new page. Never overwrite earlier readings to make room. */
 bool live_logger_append(live_logger_t *logger, bool sensor_ok, int16_t temperature_centi)
 {
     if (!logger->running) return false;
@@ -65,6 +76,8 @@ bool live_logger_append(live_logger_t *logger, bool sensor_ok, int16_t temperatu
     return true;
 }
 
+/* Include finished pages plus a sealed copy of the partial page. Keep complete
+ * 256-byte pages and their 0xFF padding so the PC decoder sees the same format. */
 bool live_logger_snapshot(live_logger_t *logger, const uint8_t **bytes, size_t *length)
 {
     if (logger->snapshot_held) return false;
@@ -86,6 +99,8 @@ bool live_logger_snapshot(live_logger_t *logger, const uint8_t **bytes, size_t *
     return true;
 }
 
+/* UART is finished with this copy. The bytes stay available for the USB 'd'
+ * display until a later snapshot or CLEAR replaces them. */
 void live_logger_release(live_logger_t *logger)
 {
     logger->snapshot_held = false;

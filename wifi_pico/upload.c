@@ -6,9 +6,12 @@
 #include "http_post.h"
 #include "http_test_config.h"
 static unsigned active, last_attempt, config_token;
+static volatile unsigned network_ready;
+unsigned upload_network_ready(void) { return network_ready; }
 /* active=1 lends an upload buffer; active=2 fetches copied CONFIG values. */
 void upload_poll(unsigned ready)
 {
+    network_ready = ready;
     upload_job_t job;
     if(!active && rt_config_request_take(&config_token)) {
         if(!ready || HTTP_BUILD_CHECK) {
@@ -28,7 +31,12 @@ void upload_poll(unsigned ready)
         active=1;last_attempt=0;
         rt_numbers("[HTTP] POST /logs: length=%u ID=",job.length,0,0);
         rt_log(job.id);rt_log("\n");
+#if APP_BATCHED
+        http_post_start_batch((unsigned)rt_now_ms(),HTTP_PC_ADDRESS,HTTP_PC_PORT,
+                             job.data,job.length,job.id,job.total_length);
+#else
         http_post_start_data((unsigned)rt_now_ms(),HTTP_PC_ADDRESS,HTTP_PC_PORT,job.data,job.length,job.id);
+#endif
     }
     if(!active) return;
     http_post_poll((unsigned)rt_now_ms(),ready);

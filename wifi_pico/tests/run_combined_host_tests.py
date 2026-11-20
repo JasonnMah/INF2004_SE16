@@ -24,7 +24,7 @@ radio=kernel.rsplit('#if APP_COMBINED\n',1)[1].rsplit('#endif',1)[0]
 run(flags+['-DAPP_COMBINED=1','-I'+str(B),'-I'+str(W),'-I'+str(S),
            W/'tests/test_radio_ipc.c',W/'rx_ring.c','-o',B/'test_radio_ipc'])
 run([B/'test_radio_ipc'])
-run(flags+['-I'+str(W),W/'log_id.c',W/'tests/test_log_id.c','-o',B/'test_log_id'])
+run(flags+['-I'+str(W),'-I'+str(S),W/'log_id.c',S/'protocol/log_digest.c',W/'tests/test_log_id.c','-o',B/'test_log_id'])
 ids=run([B/'test_log_id']).splitlines();out.pop()
 for n,line in enumerate(ids):assert line=='log-'+hashlib.sha256(bytes(i%256 for i in range(n))).hexdigest()
 assert len(ids)==1025

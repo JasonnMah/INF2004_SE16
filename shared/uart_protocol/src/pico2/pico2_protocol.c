@@ -7,6 +7,7 @@ static void reset_received_log(pico2_ctx_t *p2)
     p2->received_log_length = 0;
     p2->received_log_valid = false;
     p2->last_data_length = 0;
+    p2->data_ack_deferred = false;
 }
 
 void pico2_abort(pico2_ctx_t *p2)
@@ -18,7 +19,7 @@ void pico2_abort(pico2_ctx_t *p2)
 
 static void check_receive_timeout(pico2_ctx_t *p2)
 {
-    if (p2->state == P2_RECEIVING_DATA &&
+    if (p2->state == P2_RECEIVING_DATA && !p2->data_ack_deferred &&
         protocol_now_ms(&p2->link) - p2->last_receive_progress_ms >= RECEIVE_PROGRESS_TIMEOUT_MS)
     {
         protocol_log(&p2->link, "[P2] Receive timeout: no transfer progress\n");
@@ -246,6 +247,10 @@ static void pico2_handle_data(pico2_ctx_t *p2,
 
     uint16_t block_index = read_u16_le(frame->payload);
     size_t data_length = frame->payload_length - DATA_BLOCK_INDEX_SIZE;
+    if (p2->data_ack_deferred && block_index == p2->expected_block) {
+        pico2_nack(p2, frame, NACK_BAD_BLOCK);
+        return;
+    }
 
     // New block in expected order.
     if (block_index == p2->expected_block)
@@ -268,6 +273,10 @@ static void pico2_handle_data(pico2_ctx_t *p2,
         p2->last_data_length = data_length;
         p2->last_receive_progress_ms = protocol_now_ms(&p2->link);
 
+        if (p2->hooks.defer_data_ack && p2->hooks.defer_data_ack(p2)) {
+            p2->data_ack_deferred = true;
+            return;
+        }
         if (p2->hooks.drop_data_ack != NULL && p2->hooks.drop_data_ack(block_index))
         {
             return;
@@ -287,6 +296,7 @@ static void pico2_handle_data(pico2_ctx_t *p2,
         memcmp(&p2->received_log[p2->received_log_length - data_length],
                &frame->payload[DATA_BLOCK_INDEX_SIZE], data_length) == 0)
     {
+        if (p2->data_ack_deferred) return; /* Still awaiting the same PC receipt. */
         protocol_log(&p2->link, "[P2] Duplicate DATA block detected; ACKing without storing twice\n");
 
         pico2_ack(p2, frame);
@@ -301,6 +311,7 @@ static void pico2_handle_data(pico2_ctx_t *p2,
 static void pico2_handle_transfer_end(pico2_ctx_t *p2,
                                       const protocol_frame_t *frame)
 {
+    if (p2->data_ack_deferred) return;
     // A lost END ACK must not re-run completion or disturb a newer command.
     if (p2->completed_end_valid &&
         frame->payload_length == TRANSFER_END_PAYLOAD_SIZE &&
@@ -322,7 +333,7 @@ static void pico2_handle_transfer_end(pico2_ctx_t *p2,
 
     uint16_t total_blocks = read_u16_le(frame->payload);
 
-    bool transfer_valid = total_blocks == p2->expected_block;
+    bool transfer_valid = !p2->data_ack_deferred && total_blocks == p2->expected_block;
     if (transfer_valid && p2->hooks.validate_log != NULL)
     {
         transfer_valid = p2->hooks.validate_log(p2->received_log, p2->received_log_length);
@@ -389,4 +400,15 @@ void pico2_tick(pico2_ctx_t *p2)
     {
         protocol_log(&p2->link, "\n[P2] Command timeout: retransmitted\n");
     }
+}
+
+bool pico2_confirm_data(pico2_ctx_t *p2)
+{
+    if (p2->state != P2_RECEIVING_DATA || !p2->data_ack_deferred) return false;
+    uint8_t scratch[TX_BUFFER_SIZE];
+    if (!send_ack(&p2->link, p2->link.session_id, p2->next_tx_sequence++,
+                  p2->last_data_sequence, scratch, sizeof(scratch))) return false;
+    p2->data_ack_deferred = false;
+    p2->last_receive_progress_ms = protocol_now_ms(&p2->link);
+    return true;
 }

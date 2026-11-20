@@ -7,6 +7,7 @@
 #endif
 IMPORT UW tm_usb_state(void);
 extern void http_service_enable(void);
+extern void http_service_report_request(void);
 #if APP_FAULT_INJECTION
 extern void fault_reset(void);
 #endif
@@ -36,12 +37,23 @@ static void start(FP entry, UW affinity, PRI priority, void *stack, SZ size)
 }
 EXPORT INT usermain(void)
 {
+#if APP_BATCHED
+    /* Recovery must also run on USB power without a Serial Monitor/DTR. */
+    unsigned long long usb_wait_started = rt_now_ms();
+    while (tm_usb_state() != 3u && rt_now_ms() - usb_wait_started < 2000u) rt_sleep(100);
+#else
     while (tm_usb_state() != 3u) { rt_sleep(100); }
+#endif
     rt_sleep(300);
 #if APP_SENSOR_EMULATOR
     rt_log("[START] Wi-Fi Pico UART SMP single-board test\n");
 #else
+#if APP_BATCHED
+    rt_log("[START] Wi-Fi Pico automatic 4 KiB UART / flash / HTTP batching\n");
+    rt_log("[BUILD] Maximum log=1 MiB; automatic restart recovery; Sensor flash retained\n");
+#else
     rt_log("[START] Wi-Fi Pico UART + HTTP two-board integration\n");
+#endif
     rt_log("[BUILD] SensorEmulator=DISABLED application_tasks=4 HTTP=COMPRESSED_BYTES\n");
 #endif
     tm_printf((UB *)"[BUILD] course=%s SMP=%u cores=%u UART0=PROTOCOL UART_FAULT=%u DIAGNOSTICS=%u WIFI=cyw43\n",
@@ -78,7 +90,12 @@ EXPORT INT usermain(void)
         if (tm_usb_state() != 3u) { ready_printed = 0; }
         else if (!ready_printed) {
             ready_printed = 1;
+            http_service_report_request(); /* Reopening COM5 also shows the current network state. */
+#if APP_BATCHED
+            rt_log("[READY] GP20 CONFIG; GP21 transfers whole log automatically; hold GP22 for 2 seconds to clear Sensor flash\n");
+#else
             rt_log("[READY] GP20 CONFIG from PC settings; GP21 retrieve then upload on next press; GP22 clear. Maker Pi GP6 status LED\n");
+#endif
 #if APP_SENSOR_EMULATOR
             rt_log("[READY] Loopback jumpers: GP0 -> GP5 and GP4 -> GP1; AHT10 not used\n");
 #else

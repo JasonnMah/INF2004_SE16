@@ -3417,3 +3417,361 @@ A Word handover was created outside the repository and rendered for page review.
 It covers current progress, code/file map, shared API, UART frames, HTTP/PC flow,
 builds/wiring and unfinished work. No commit or push was performed.
 Final combined UF2 SHA-256: 5259f5072fe7fe378fb0f067cc856c87577cbc10ea9f7b3bbaeae4a53b9e897d
+
+## 2026-11-12 — 4 KiB batching foundations (not integrated firmware)
+
+- Added PC batch assembly with stable SHA256/offset identities, disk-backed progress,
+  exact duplicate checks, 1 MiB total limit and full-log hash validation before CSV.
+- Added a portable flash journal with FETCHING / READY / CONFIRMED states. Host
+  tests cover all 256 batches of a 1 MiB log, metadata rotation, interrupted writes,
+  receipt-before-cleanup ordering, corruption, partial tails and empty logs.
+- New host/localhost checks: PASS. Existing 29 PC receiver regressions: PASS.
+- Added an isolated `-Target flash -BuildEnvironment WSL` qualification firmware.
+  It uses the pinned course SMP kernel, USB diagnostics and a RAM-only core-1
+  rendezvous while core 0 performs ROM flash operations. The firmware/UF2 exclude
+  the reserved last 16 KiB. Build/static result is recorded under the ignored
+  build folder; it is not evidence of physical flash or SMP correctness.
+- Physical flash test: PENDING. GP21 saves known test bytes; GP20 simulates a
+  receipt only. No Sensor/UART/HTTP integration or automatic upload resume is
+  claimed. Existing combined firmware, Sensor source and UART baseline remain
+  the regression references; 512-frame flow control and recovery integration
+  follow successful flash qualification. No commit or push performed.
+- Final flash build/static checks: PASS (Pico SDK 2.2.0 dependencies, course SMP=1,
+  Cortex-M0+, USB only). Size: text=62189, data=0, bss=32260 bytes.
+- Standard host suite: PASS (new 5 batch receiver tests, cache fault model,
+  existing 20 CSV and 29 receiver tests, Wi-Fi retry/reporting and HTTP client checks).
+- SHA-256 snapshot check: all 58 protected Sensor/shared/reference C/H files
+  unchanged in this milestone; existing combined UF2 matches its prior build record.
+
+## 2026-11-18 — user-observed single-board flash-test startup
+
+Physical observation supplied by the user on Wi-Fi Pico USB COM5. This is the
+isolated SMP flash-cache test, with UART0 free and Wi-Fi disabled; it is not a
+two-board UART/HTTP batching result.
+
+```text
+[START] Wi-Fi Pico SMP flash cache test; UART0 FREE, Wi-Fi OFF
+[BUILD] SMP=1 cores=2 reserved=last 16 KiB; Sensor firmware unchanged
+[TEST] GP21 save known 4096 bytes; reboot checks persistence; GP20 SIMULATES receipt
+[CACHE] state=0 generation=0 bytes=0 offset=0 total=0
+[SMP] writer_core=0 core1_ticks=705 park_count=0 flash_operations=0
+```
+
+Startup/empty-cache reporting: PASS (user observed). Writer reports physical
+core 0; helper tick counter advanced. No flash operation or RAM rendezvous had
+occurred yet. Physical write/read-back, core-1 parking during flash, restart
+retention and simulated receipt cleanup remain pending. Next action: GP21 once.
+
+### 2026-11-18 — GP21 tap not detected by flash qualification v1
+
+User reports no save output after GP21: cache state=0, generation=0, bytes=0;
+writer_core=0, core1_ticks=19993, park_count=0, flash_operations=0. This is a
+user-observed single-board failure to start the write test, not evidence that a
+flash write or recovery succeeded or failed.
+
+Inspection found a qualification-harness bug: its debounce assumed each
+`tk_dly_tsk(1)` iteration consumed one millisecond, and counted six samples five
+iterations apart. The actual course CNF_TIMER_PERIOD is 10 ms; task delays are
+rounded and include tick scheduling, so ordinary taps can be missed by a debounce
+that effectively waits hundreds of milliseconds. This is a confirmed code defect;
+physical retest is needed to establish whether it explains this observation fully.
+
+Fix: reuse the existing elapsed-time app_button_event() with tk_get_otm(), sample
+every iteration, and print accepted-button and writer-command diagnostics. New
+startup marker: buttons=elapsed30ms-v2. No kernel, UART protocol, Sensor source,
+flash-store format or cache contents are changed. Physical write/retention remain
+pending until the user flashes and exercises the updated qualification firmware.
+
+Debounce fix validation (build/host only): PASS. The focused test covers 60 ms
+presses under 10/20 ms sampling, one event per hold, stable release, bounce,
+jitter and uptime wrap. Clean flash UF2 build/static checks passed; the linked
+core-1 task is verified to call tk_get_otm() and app_button_event(). Firmware
+size: text=62593, data=0, bss=32260 bytes. Existing course/UART sources and the
+flash partition remain unchanged. Physical v2 write and retention: PENDING.
+
+### 2026-11-18 — user-observed physical v2 flash write/read-back PASS
+
+Single Wi-Fi Pico qualification result supplied by the user on COM5, using the
+elapsed30ms-v2 button build. UART0 is free, Wi-Fi is OFF, and Sensor firmware is
+unchanged. This is not an end-to-end batching, networking or recovery result.
+
+```text
+[START] Wi-Fi Pico SMP flash cache test; UART0 FREE, Wi-Fi OFF
+[BUILD] SMP=1 cores=2 reserved=last 16 KiB; Sensor firmware unchanged
+[BUILD] buttons=elapsed30ms-v2 kernel_tick_ms=10
+[TEST] GP21 save known 4096 bytes; reboot checks persistence; GP20 SIMULATES receipt
+[CACHE] state=0 generation=0 bytes=0 offset=0 total=0
+[SMP] writer_core=0 core1_ticks=254 park_count=0 flash_operations=0
+[BUTTON] GP21 accepted; tk_prc=2 rp2040_core=1
+[FLASH] GP21 command received by writer task
+[PASS] 4096 test bytes saved and read back from flash
+[CACHE] state=2 generation=2 bytes=4096 offset=0 total=4096
+[CACHE] Pending 4096-byte test batch verified; crc16_x25=6acf
+[SMP] writer_core=0 core1_ticks=1337 park_count=19 flash_operations=19
+```
+
+PASS (user-observed physical): GP21 accepted on core 1; kernel IPC reached the
+writer on core 0; the 4,096-byte known pattern was programmed/read back and the
+READY journal record verified, CRC16/X-25=0x6acf. Nineteen completed flash
+operations and nineteen core-1 RAM pauses were reported. These observations
+qualify this test scenario only; they do not establish flash safety during
+network DMA, UART reception, a mid-write power cut or arbitrary interrupt load.
+
+Pending: RUN-reset retention (next), complete power-cycle retention, simulated
+receipt cleanup and integrated UART/HTTP batching with automatic resume. The
+next test resets the Wi-Fi Pico without reflashing or accepting the simulated
+receipt, then checks the same generation, length, pattern and CRC at startup.
+
+### 2026-11-18 — user-observed physical RUN-reset retention PASS
+
+The user pressed the Wi-Fi Pico RUN button once after the successful v2 write,
+then reopened USB COM5. No simulated receipt or reflash was reported.
+
+```text
+[START] Wi-Fi Pico SMP flash cache test; UART0 FREE, Wi-Fi OFF
+[BUILD] SMP=1 cores=2 reserved=last 16 KiB; Sensor firmware unchanged
+[BUILD] buttons=elapsed30ms-v2 kernel_tick_ms=10
+[TEST] GP21 save known 4096 bytes; reboot checks persistence; GP20 SIMULATES receipt
+[CACHE] state=2 generation=2 bytes=4096 offset=0 total=4096
+[CACHE] Pending 4096-byte test batch verified; crc16_x25=6acf
+[SMP] writer_core=0 core1_ticks=457 park_count=0 flash_operations=0
+```
+
+PASS (user-observed single-board physical reset retention): the READY record,
+generation 2, exact 4,096-byte test pattern and CRC 0x6acf survived RUN reset and
+were recovered at startup without a flash write/erase (operation and park
+counters reset to zero). USB disconnect/re-enumeration during RUN reset is normal.
+This proves retention across reset in the qualification target, not full power
+removal, interruption during a write or automatic UART/HTTP upload continuation.
+Next: power-cycle the connected boards without BOOTSEL/reflash and verify the
+same pending record. Simulated receipt cleanup remains pending afterward.
+
+### 2026-11-18 — user-observed full power-cycle retention PASS
+
+The user disconnected USB power from both connected Picos, then reconnected them
+normally and opened Wi-Fi Pico COM5. This is the isolated flash-cache v2 target.
+
+```text
+[START] Wi-Fi Pico SMP flash cache test; UART0 FREE, Wi-Fi OFF
+[BUILD] SMP=1 cores=2 reserved=last 16 KiB; Sensor firmware unchanged
+[BUILD] buttons=elapsed30ms-v2 kernel_tick_ms=10
+[TEST] GP21 save known 4096 bytes; reboot checks persistence; GP20 SIMULATES receipt
+[CACHE] state=2 generation=2 bytes=4096 offset=0 total=4096
+[CACHE] Pending 4096-byte test batch verified; crc16_x25=6acf
+[SMP] writer_core=0 core1_ticks=479 park_count=0 flash_operations=0
+```
+
+PASS (user-observed single-board power-cycle retention): the READY record,
+generation 2, 4,096-byte known pattern and CRC 0x6acf were recovered after power
+removal. Zero flash_operations/park_count indicates no startup write or erase.
+A later monitor reopen repeated the pending-batch verification with core1_ticks
+1552 and operation counters still zero. The user also reported a failed COM6
+open; this does not affect the observed Wi-Fi COM5 cache test and is not assessed
+as a Sensor firmware failure here.
+
+Still pending: simulated receipt/cleanup, reset after cleanup, interruption
+DURING a flash operation, flash operations with networking/UART load, and full
+512-frame UART/HTTP batching with automatic upload resume. Next: Wi-Fi GP20 once
+in this test firmware only; it simulates a PC receipt and releases test bytes.
+
+### 2026-11-18 — user-observed simulated receipt and cache cleanup PASS
+
+The user pressed Wi-Fi GP20 once with the v2 test batch READY. This action is a
+qualification-harness simulation of PC confirmation, not an HTTP transaction.
+
+```text
+[BUTTON] GP20 accepted; tk_prc=2 rp2040_core=1
+[FLASH] GP20 command received by writer task; SIMULATED receipt only
+[PASS] SIMULATED receipt committed; temporary test bytes released; no HTTP occurred
+[CACHE] state=0 generation=4 bytes=4096 offset=0 total=4096
+[SMP] writer_core=0 core1_ticks=9469 park_count=3 flash_operations=3
+```
+
+PASS (user-observed single-board physical storage test): receipt simulation
+committed CONFIRMED progress, erased/read-back-verified the data sector, then
+committed IDLE. Generation advanced from 2 to 4; three flash operations and
+three core-1 RAM pauses match the two metadata writes and one data-sector erase.
+The retained length/offset/total describe the completed record, not a pending
+payload. No Sensor CLEAR or HTTP upload occurred.
+
+Next: RUN-reset retention of IDLE/generation 4 without GP21, reflash or another
+receipt. Full batching, automatic HTTP resume, flash under networking/UART load,
+and physical interruption during an operation remain pending.
+
+### 2026-11-18 — user-observed post-cleanup RUN-reset retention PASS
+
+After the simulated receipt and cleanup, the user pressed RUN. USB output was
+initially blank; reopening Serial Monitor recovered the following startup report.
+No reflash or new GP20/GP21 action was reported between cleanup and this check.
+
+```text
+[START] Wi-Fi Pico SMP flash cache test; UART0 FREE, Wi-Fi OFF
+[BUILD] SMP=1 cores=2 reserved=last 16 KiB; Sensor firmware unchanged
+[BUILD] buttons=elapsed30ms-v2 kernel_tick_ms=10
+[TEST] GP21 save known 4096 bytes; reboot checks persistence; GP20 SIMULATES receipt
+[CACHE] state=0 generation=4 bytes=4096 offset=0 total=4096
+[SMP] writer_core=0 core1_ticks=4813 park_count=0 flash_operations=0
+```
+
+PASS (user-observed single-board physical reset-after-cleanup): IDLE/generation 4
+survived reset, the confirmed batch was not treated as pending, and startup
+performed no flash operation. Length/offset/total remain historical metadata.
+The initially blank monitor did not establish a firmware crash; reopening it
+restored reporting. No HTTP upload or Sensor transfer took place in this test.
+
+The qualification happy path now has user-observed passes for write/read-back,
+READY retention across RUN reset, READY retention across full power removal,
+simulated receipt/cleanup, and IDLE retention after cleanup. Full UART/HTTP
+batching and automatic upload resume are NOT implemented or physically tested.
+Physical mid-operation power cuts and flash with UART/networking load remain
+unqualified. These results permit the next software-integration milestone; they
+do not by themselves establish production flash safety under all workloads.
+
+### 2026-11-18 — complete batching software integration (physical test pending)
+
+This later entry supersedes the earlier "not implemented" development status.
+It does not change the scope of the user's Wi-Fi-off flash qualification.
+
+Implemented opt-in firmware pair: `wifi_pico_batched` and `sensor_pico_batched`.
+One Wi-Fi GP21 press freezes a Sensor flash prefix and transfers up to 1 MiB
+automatically in 4096-byte ranges. Each full range uses 512 existing eight-byte
+DATA frames; its last DATA ACK is withheld until the Wi-Fi flash batch is verified,
+the PC's matching storage receipt is validated, confirmation is journaled and
+temporary bytes are erased. The original Sensor flash is retained. Wi-Fi GP22
+requires a two-second hold when idle; Sensor button meanings are unchanged.
+
+Opt-in control messages 0x09 OPEN, 0x0a INFO and 0x0b DONE carry the frozen
+SHA-256/total/range identity. A distinct data session and local block numbering
+per range avoid the old whole-transfer 16-bit block limit. CONFIG layout,
+eight-byte DATA layout, byte stuffing, preamble and frame CRC remain unchanged.
+Both new endpoints must be flashed together. The previous targets remain usable.
+
+Automated PASS results (modeled hardware/localhost only):
+
+- `wifi_pico/tests/run_batch_tests.py`: full 1 MiB / 256 batches / 131072 DATA
+  frames, short and empty logs, held/duplicate ACK behavior, immutable HTTP
+  ownership, lost INFO/END ACK/DONE, and rejection of a changed Sensor prefix.
+- Gateway resets during FETCHING, READY and CONFIRMED; lost PC receipts;
+  Sensor reset during upload; torn confirmed-data cleanup; and a PC outage
+  exceeding the Sensor retry budget. Resume uses the committed identity/range.
+- The actual batch Communication step and UART adapter: PC CONFIG, one GP21,
+  preamble on outbound frames, busy-button rejection, buffer loan, RX fault
+  during upload, failed upload retry, restart resume and explicit CLEAR.
+- Actual kernel IPC functions with the extended descriptor: four message
+  buffers, copied requests/results, correct routing and bounded backpressure.
+- Actual Sensor main/flash callbacks: closing and advancing the page protects
+  the frozen prefix, later samples are excluded, restart revalidates its SHA,
+  and a full 1 MiB flash region is served without truncation to 1 KiB.
+- Actual HTTP client -> actual receiver -> actual decoder: 8448 encoded Sensor
+  bytes in three batches; first receipt deliberately lost; retry deduplicated;
+  exact reassembled binary; CSV produced only after completion, with all 66
+  expected temperatures and the four user-facing columns.
+- Existing combined UART/workflow, HTTP client/receiver, cache power-cut model,
+  temperature CSV and Sensor flash/UART tests pass. Shared protocol assertions
+  and all eight reliability groups pass. C tests use AddressSanitizer and
+  UndefinedBehaviorSanitizer where supported by their existing runners.
+
+Build/static PASS: new Sensor and Wi-Fi targets, original Sensor target and
+original combined Wi-Fi target. Wi-Fi checks validate SMP/core affinity, the
+radio-owner boundary, unchanged reference/course sources, RAM flash routines,
+and exclusion of the reserved final 16 KiB from the linked image and UF2.
+The flash port waits for all DMA channels to be idle and rechecks with both
+CPUs held before disabling XIP. The batching application starts without waiting
+indefinitely for Serial Monitor/DTR; physical standalone recovery remains pending.
+
+Generated evidence stays under `wifi_pico/course/build_make/`:
+`batch_host/results.log`, `checks/batched-build.json`, `checks/combined-build.json`.
+Sensor modeled-hardware evidence stays under `sensor_pico/build/host/`.
+These are build/host results, not claims of a physical full-system pass.
+
+Required physical sequence: small complete log with one GP21 -> more than one
+4096-byte batch -> receiver outage/recovery -> Wi-Fi reset with a READY batch ->
+reset after confirmed progress -> power removal during a flash operation.
+Check exact Sensor/PC bytes and CSV, continuous sampling, final indicators and
+absence of premature ACK/erase. Keep the receiver's same output folder during
+recovery. Do not infer live radio/DMA/XIP safety from the earlier Wi-Fi-off test.
+
+### 2026-11-18 — user-observed small batch and recovery PASS
+
+- One GP21 press transferred 256 bytes from Sensor flash through Wi-Fi flash
+  and HTTP, then released the temporary gateway batch. CSV checked: 11 readings,
+  all OK, 60-second spacing, first time matching the PC CONFIG. Sensor continued
+  sampling into the next page while retaining the frozen flash prefix.
+- Receiver outage: 512-byte batch survived repeated HTTP failures; the same ID
+  retried automatically. Restarting the receiver completed the upload without
+  another GP21 press. CSV checked: 17 readings, all OK, 60-second spacing, with
+  the original 11 rows unchanged.
+- Wi-Fi-only reset with the receiver stopped: user reported resetting only
+  Wi-Fi Pico after a 768-byte batch was saved and HTTP failed. Sensor stayed
+  powered and kept sampling. Once Wi-Fi obtained its address, the same batch ID
+  `batch-8b60e1eeb152ea8111229964ec656d1a57f1f8d88bf2d51d755f0e4bc1b446d9-00000000`
+  uploaded automatically (HTTP 201), followed by confirmed cleanup and transfer
+  completion. Sensor's pending DATA retransmissions during the wait did not
+  prevent completion. The slow GP6 blink accompanied the network-address wait.
+
+These are short-batch physical passes. A complete 4096-byte batch, multiple
+ranges in one transfer and power loss during an active write still need tests.
+
+### 2026-11-18 — clearer Wi-Fi connection reporting
+
+The application now distinguishes searching, joining, joined-but-waiting-for-IP,
+network ready, lost link and setup failure. Waiting progress prints at most once
+per ten seconds. Actual failed-join retries announce their two-second gap and
+the next attempt; waiting for DHCP is not called a failed hotspot connection.
+Reopening COM5 requests the current status from the radio owner without changing
+the connection or its elapsed wait timer. Raw scan/link codes are verbose-only.
+
+PASS host checks against the actual poll code: legacy/batched/verbose variants,
+latched DHCP timeout followed by late success, no reporting flood, ten-second
+progress bounds and clock wrap, live link loss, COM5 status refresh, and retries
+beyond attempt three with the same two-second timing. Upload polling continues
+for both ready and offline inputs. Retry-policy tests pass through 1000 attempts.
+Physical display confirmation for the revised messages is pending.
+
+### 2026-11-18 — user-observed full batch and automatic two-batch transport PASS
+
+User supplied both serial logs after preparing additional real Sensor pages.
+
+- Exact boundary: 4096 bytes, offset 0 / total 4096, HTTP 201 on attempt 1,
+  PC confirmation, temporary gateway flash release, then transfer completion.
+  Batch identity: 1fb3a54c211cde3b170069ccddb61918a53c4b30b0f34ad292ae9ed035d47e59.
+- Crossing the boundary: one GP21 started a 4352-byte log. Gateway saved/uploaded
+  4096 bytes at offset 0, received HTTP 201 and confirmed 4096 / 4352 before
+  releasing temporary bytes. It then automatically saved/uploaded 256 bytes at
+  offset 4096, received HTTP 201 and confirmed 4352 / 4352 before completion.
+  Both batches used whole-log identity
+  6e2ff5fe763bcf909e9ff3f19a499ac0e28addd35e99a6af1c95947fbc9594f4,
+  with suffixes 00000000 and 00001000. No second GP21 was reported within this
+  two-batch transfer. Sensor logged both ranges and confirmed flash retention.
+
+PASS scope: full 4 KiB batch and automatic progression/reuse for a short second
+batch on the physical paired firmwares, with successful PC receipts. The earlier
+small-batch-only limitation is superseded by this entry. PC assembled binary/hash
+and CSV for this 4352-byte log still need checking against receiver output/files.
+This does not establish a physical 1 MiB pass, multi-batch restart recovery, or
+power-cut safety during an active flash operation. No code/build change here.
+### 2026-11-18 — two-batch PC assembly and CSV verification PASS
+
+User supplied receiver output and the downloaded final CSV after the 4352-byte
+transfer. Receiver recorded offset 0 / length 4096 / complete=0, then offset 4096 /
+length 256 / complete=1. Only after the second range did it report the complete
+4352-byte binary verified and export a CSV containing 126 readings.
+
+Independent local checks: assembled binary length is 4352 and SHA-256 is
+6e2ff5fe763bcf909e9ff3f19a499ac0e28addd35e99a6af1c95947fbc9594f4,
+matching the whole-log identity reported by Sensor/gateway. Its first 4096 bytes
+match the preceding full-batch snapshot byte for byte; the new tail is 256 bytes.
+Downloaded CSV matches the receiver's CSV, has sample numbers 1..126 without
+gaps, and all statuses are OK. The previous 97 rows remain unchanged.
+
+PASS: normal physical two-batch retrieval, Wi-Fi flash reuse, two successful PC
+receipts, whole-log assembly/hash validation and CSV export from one GP21 press.
+This completes the PC assembly/CSV check pending in the earlier transport entry.
+
+Separate known limitation: rapid Sensor GP20 debug sampling is encoded as regular
+configured-interval slots. The resulting CSV includes repeated/backward times
+when a fresh TIMEBASE follows artificially advanced sample times. Temperature
+and byte-transfer validation passed; actual timestamps for manual debug samples
+still need correction. No firmware change made as part of this verification.
+Multi-batch restart after confirmed progress, full physical 1 MiB and power loss
+during an active flash operation remain untested.

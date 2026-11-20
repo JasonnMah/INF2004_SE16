@@ -19,6 +19,7 @@ typedef struct
     bool (*drop_data_ack)(uint16_t block);
     bool (*validate_log)(const uint8_t *data, size_t length);
     void (*transfer_complete)(pico2_ctx_t *p2);
+    bool (*defer_data_ack)(pico2_ctx_t *p2); /* Batch boundary only; NULL is unchanged. */
 } pico2_hooks_t;
 
 typedef enum
@@ -56,6 +57,7 @@ struct pico2_ctx
     uint64_t last_receive_progress_ms;
     uint16_t last_data_sequence;
     size_t last_data_length;
+    bool data_ack_deferred;
 
     // Remember the last completed END independently of application commands.
     bool completed_end_valid;
@@ -90,4 +92,7 @@ void pico2_handle_frame(
     pico2_ctx_t *p2,
     const protocol_frame_t *frame);
 void pico2_tick(pico2_ctx_t *p2);
+/* Release a deliberately held DATA ACK after the application commits delivery.
+ * Duplicates cannot release it, and the receive-idle timer is paused while held. */
+bool pico2_confirm_data(pico2_ctx_t *p2);
 #endif

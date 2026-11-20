@@ -82,6 +82,8 @@ static void pico1_send_next_transfer_frame(pico1_ctx_t *p1)
             return;
         }
 
+        if (p1->last_data_ack_timeout_ms && p1->current_block + 1u == p1->total_blocks)
+            p1->pending_transfer.timeout_ms = p1->last_data_ack_timeout_ms;
         bool sent_by_hook = p1->hooks.send_data != NULL &&
             p1->hooks.send_data(&p1->link, &p1->pending_transfer,
                                 p1->current_block, payload,

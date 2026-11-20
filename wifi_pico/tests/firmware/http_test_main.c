@@ -49,8 +49,8 @@ EXPORT INT usermain(void)
 #if HTTP_BUILD_CHECK
     rt_log("[BUILD] BUILD CHECK ONLY: placeholder network settings; POST disabled\n");
 #endif
-    rt_log("[BUILD] WIFI_DIAGNOSTICS=1; scan and join details enabled\n");
-    rt_log("[WIFI] Connection attempt 1/3; retry gap=2000 ms\n");
+    rt_numbers("[BUILD] Connection progress enabled; verbose Wi-Fi details=%u\n", APP_VERBOSE_DIAGNOSTICS, 0, 0);
+    rt_log("[WIFI] Connection attempt 1; automatic retries continue until connected\n");
     rt_numbers("[BUILD] WIFI_NONET_RETRY_MS=%u JOIN_WINDOW_MS=%u\n",
                (unsigned)(WIFI_JOIN_NONET_RETRY_US / 1000),
                (unsigned)(WIFI_JOIN_WINDOW_US / 1000), 0);

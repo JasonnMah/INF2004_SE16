@@ -24,6 +24,16 @@ commands[0:0]=[['gcc','-std=c11','-Wall','-Wextra','-Werror','-g','-fsanitize=ad
  str(W/'tests/test_wifi_reporting.c'),'-o',str(B/'test_wifi_reporting')],
  [str(B/'test_wifi_reporting')]]
 output=[]
+commands[0:0]=[['gcc','-std=c11','-Wall','-Wextra','-Werror','-g','-fsanitize=address,undefined',
+ '-fno-pie','-no-pie','-I'+str(W),'-I'+str(W.parent/'shared/uart_protocol/src'),
+ str(W/'buttons.c'),str(W/'tests/test_flash_buttons.c'),'-o',str(B/'test_flash_buttons')],
+ [str(B/'test_flash_buttons')]]
+commands[0:0]=[['gcc','-std=c11','-Wall','-Wextra','-Werror','-g','-fsanitize=address,undefined',
+ '-fno-pie','-no-pie','-I'+str(W),'-I'+str(W.parent/'shared/uart_protocol/src'),
+ str(W/'batch_store.c'),str(W/'tests/test_batch_store.c'),
+ str(W.parent/'shared/uart_protocol/src/protocol/frame.c'),
+ str(W.parent/'shared/uart_protocol/src/protocol/crc16.c'),'-o',str(B/'test_batch_store')],
+ [str(B/'test_batch_store')],[sys.executable,'-B',str(W/'tests/test_batch_receiver.py')]]
 for command in commands:
  p=subprocess.run(command,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
  output.append(p.stdout);print(p.stdout,end='')

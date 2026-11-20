@@ -34,7 +34,12 @@ typedef enum {
  * a page torn by a power cut, are left alone. Returns FLOG_OK, FLOG_ERR_FULL or FLOG_ERR_OVERLAP. */
 flog_status_t flog_init(void);
 
-/* Erase the whole region (highest sector first) and go back to page 0. */
+/* Erase and read back one sector. Used to service UART between erase steps.
+ * Does not reset the write position; call flog_init() after all sectors pass. */
+bool flog_erase_sector(uint32_t sector);
+
+/* Erase and verify the whole region (highest sector first), then reset page 0.
+ * A failure does not mark partially erased storage as empty or writable. */
 bool flog_erase_all(void);
 
 /* Program the 256-byte image to the current page. */
@@ -49,5 +54,7 @@ bool     flog_is_full(void);
 /* Raw access, for dumping. */
 void flog_read_page(uint32_t page, uint8_t out[FLOG_PAGE_BYTES]);
 bool flog_page_is_empty(uint32_t page);
+/* Read-only XIP source; caller freezes the page range before borrowing it. */
+const uint8_t *flog_data(void);
 
 #endif

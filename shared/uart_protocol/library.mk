@@ -1,6 +1,6 @@
 # Included from a firmware Make profile. No kernel/SDK headers enter these sources.
 # Caller supplies UART_PROTOCOL_ROOT, UART_LIBRARY_DIR and UART_ENDPOINTS.
-UART_WIRE_SRCS := protocol/crc16.c protocol/frame.c protocol/stream_parser.c protocol/reliability.c
+UART_WIRE_SRCS := protocol/log_digest.c protocol/crc16.c protocol/frame.c protocol/stream_parser.c protocol/reliability.c
 UART_SENSOR_SRCS := pico1/pico1_protocol.c
 UART_GATEWAY_SRCS := pico2/pico2_protocol.c
 UART_WIRE_OBJS := $(addprefix $(UART_LIBRARY_DIR)/,$(UART_WIRE_SRCS:.c=.o))
@@ -26,3 +26,9 @@ $(UART_LIBRARY_DIR)/libuart_gateway.a: $(UART_GATEWAY_OBJS)
 clean: uart-library-clean
 uart-library-clean:
 	-$(RM) $(UART_LIBRARY_OBJS)
+
+ifneq ($(filter sensor_batch,$(UART_ENDPOINTS)),)
+C_DEPS += $(UART_LIBRARY_DIR)/batch/batch_sensor.d $(UART_SENSOR_OBJS:.o=.d)
+endif
+$(UART_LIBRARY_DIR)/libuart_sensor_batch.a: $(UART_LIBRARY_DIR)/batch/batch_sensor.o $(UART_SENSOR_OBJS)
+	$(patsubst %gcc,%ar,$(GCC)) rcs "$@" $^

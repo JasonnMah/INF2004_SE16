@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Static/build checks, not RP2040 runtime or physical UART validation."""
 from pathlib import Path
-import subprocess, hashlib, json, sys, shlex, re, struct
+import subprocess, hashlib, json, sys, shlex, re, struct, os
 W = Path(__file__).resolve().parents[1]
 R = W.parent
-B = W/"course/build_make"
+B = Path(os.environ.get("INF2004_BUILD_DIR",W/"course/build_make")).resolve()
+E = Path(os.environ.get("INF2004_EVIDENCE_DIR",W/"tests/evidence"))
+E.mkdir(parents=True,exist_ok=True)
 mode = int(sys.argv[1]) if len(sys.argv)>1 else 0
 emulator = int(sys.argv[2]) if len(sys.argv)>2 else 1
 diagnostics = int(sys.argv[3]) if len(sys.argv)>3 else 0
@@ -102,7 +104,7 @@ result={"kind":"build/static checks only","fault":mode,"sensor_emulator":bool(em
             ("CNF_SMP","TK_MAX_CORE","TM_CONSOLE_USB_CDC","TM_CONSOLE_UART","USE_SDEV_DRV","UART_FAULT","APP_SENSOR_EMULATOR","APP_VERBOSE_DIAGNOSTICS")},
         "uf2_bytes":len(data),"uf2_sha256":sha(uf2),"elf_sha256":sha(elf),
         "size":size,"physical_uart_status":"NOT TESTED"}
-out=W/"tests/evidence"/f"uart-build-{label}.json"
+out=E/f"uart-build-{label}.json"
 out.write_text(json.dumps(result,indent=2)+"\n")
 print(f"PASS: UART firmware {label}, SMP=1, USB only, unchanged baseline, ISR/IPC symbol checks")
 print(size)

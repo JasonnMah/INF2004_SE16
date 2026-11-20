@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Build/source checks only. Run in WSL after a clean build; no hardware access."""
+"""Build/source checks only. Run after a clean Windows or WSL build; no hardware access."""
 from pathlib import Path
 import subprocess, hashlib, json, csv, re, shlex, struct, collections, os
 WIFI = Path(__file__).resolve().parents[1]
 ROOT = WIFI.parent
-BUILD = WIFI / "course/build_make"
-EVIDENCE = WIFI / "tests/evidence"
+BUILD = Path(os.environ.get("INF2004_BUILD_DIR",WIFI / "course/build_make")).resolve()
+EVIDENCE = Path(os.environ.get("INF2004_EVIDENCE_DIR",WIFI / "tests/evidence"))
 PIN = "2e8e6ad480c2d84a369b12995694b9bf5e9ddfb3"
 EVIDENCE.mkdir(exist_ok=True)
 
@@ -161,7 +161,7 @@ old = json.loads((WIFI / "tests/previous_template_import.json").read_text())
 rows = []
 for entry in old["files"]:
     name = entry["path"]
-    dest = WIFI / "course" / name
+    dest = BUILD / name.removeprefix("build_make/") if name.startswith("build_make/") else WIFI / "course" / name
     upstream = next((x for x in origin["files"] if x["path"] == name), None)
     if not upstream:
         disposition = "removed_old_template_only"
@@ -190,7 +190,8 @@ for entry in old["files"]:
                  "disposition":disposition, "pinned_upstream_sha256":new_sha,
                  "purpose":role(name), "milestone1_need":usage})
 require(len(rows) == 599 and len({r["old_path"] for r in rows}) == 599, "599-file audit incomplete")
-with (WIFI / "tests/IMPORT_AUDIT.csv").open("w", newline="") as f:
+audit = EVIDENCE / "IMPORT_AUDIT.csv" if os.environ.get("INF2004_EVIDENCE_DIR") else WIFI / "tests/IMPORT_AUDIT.csv"
+with audit.open("w", newline="") as f:
     writer=csv.DictWriter(f,fieldnames=list(rows[0])); writer.writeheader(); writer.writerows(rows)
 summary = {
     "validation_kind":"build/static-source checks only; no hardware or emulator execution",

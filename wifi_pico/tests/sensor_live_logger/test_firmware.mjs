@@ -1,10 +1,16 @@
 // Actual RP2040 binary with modeled I2C/USB/UART. NOT a physical sensor test.
+// Build the Sensor firmware first, then run with Node.js. Optional arguments
+// select a scenario and target, for example:
+//   node test_firmware.mjs init-short-write sensor_live_logger_i2c_diag
+// The emulator supplies pretend AHT10 replies and acts as the Wi-Fi UART peer.
 import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import assert from 'node:assert/strict';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, '../../..');
+// ready: successful sensor; absent: no sensor; no-usb: protocol without a monitor;
+// init-short-write: startup warning but later measurements still work.
 const scenario = process.argv[2] || 'ready';
 assert(['ready', 'absent', 'no-usb', 'init-short-write'].includes(scenario));
 const target = process.argv[3] || 'sensor_live_logger';
@@ -17,12 +23,15 @@ const sim = new Simulator();
 const {rp2040: mcu, clock} = sim;
 mcu.logger = new ConsoleLogger(LogLevel.Error);
 mcu.loadBootrom(bootromB1);
+// Run the compiled Pico program, not a JavaScript rewrite of its main loop.
 mcu.flash.set(fs.readFileSync(path.join(here, 'build/' + target + '.bin')));
 mcu.core.PC = 0x10000000;
 let text = '', done = false, configAck = false, requestAck = false, ended = false;
 let nextRx = 0, peerSequence = 10, dataBlocks = 0, triggerTime, requestTime;
 const received = [], serialFrame = [];
 function later(ms, fn) { clock.createAlarm(fn).schedule(ms * 1e6); }
+// Test-peer helpers build/check frames independently of the running firmware.
+// This duplication is deliberate in the test so incorrect firmware is detected.
 function crc(bytes) {
   let value = 0xffff;
   for (const b of bytes) {
@@ -44,6 +53,7 @@ function frame(type, sequence, payload = Buffer.alloc(0)) {
   }
   return [...encoded, 0x7e];
 }
+// Deliver bytes at the configured 115200-baud 8N1 rate instead of all at once.
 function send(type, sequence, payload) {
   for (const b of frame(type, sequence, payload)) {
     nextRx = Math.max(nextRx, clock.nanos) + 1e9 * 10 / 115200;
@@ -54,6 +64,8 @@ function ack(sequence) {
   const p = Buffer.alloc(2); p.writeUInt16LE(sequence);
   send(5, peerSequence++, p);
 }
+// Validate Sensor replies, collect DATA without its block index, and ACK frames
+// as the real Wi-Fi endpoint would. Count blocks and reject a second completion.
 function processFrame(encoded) {
   const raw = []; let escape = false;
   for (const b of encoded) {
@@ -89,6 +101,8 @@ mcu.uart[1].onByte = b => {
     if (serialFrame.length) processFrame(serialFrame.splice(0));
   } else serialFrame.push(b);
 };
+// Model I2C address/byte acknowledgements and a known temperature response.
+// This checks software behavior; it cannot confirm real wiring or sensor health.
 const i2c = mcu.i2c[0];
 let readIndex = 0, commandByte;
 const response = [0x08, 0, 0, 0x06, 0, 0]; // Calibrated, not busy, exactly 25 C.
@@ -104,6 +118,8 @@ i2c.onWriteByte = b => {
   i2c.completeWrite(!(scenario === 'init-short-write' && commandByte === 0xe1 && b === 0x08));
 };
 i2c.onReadByte = () => i2c.completeRead(response[readIndex++ % response.length]);
+// Attach a pretend USB monitor, then exercise the Sensor's 's' and 'd' commands.
+// The no-usb case must still complete CONFIG and retrieval without USB output.
 if (scenario !== 'no-usb') {
   const usb = new USBCDC(mcu.usbCtrl);
   usb.cdcSetControlLineState = function(value = 0, interfaceNumber = 0) {
@@ -114,10 +130,13 @@ if (scenario !== 'no-usb') {
   later(1200, () => usb.sendSerialByte('s'.charCodeAt(0)));
   if (scenario === 'ready' || scenario === 'init-short-write') later(1300, () => usb.sendSerialByte('d'.charCodeAt(0)));
 }
+// Send CONFIG automatically; physical GP20 is replaced by the test peer here.
 later(500, () => {
   const config = Buffer.alloc(8); config.writeUInt32LE(1700000000, 0); config.writeUInt32LE(3600, 4);
   send(2, 1, config);
 });
+// Save generated evidence and check exact bytes and expected status messages.
+// Emulated time drives the test; the wall timer only catches a stuck simulation.
 function finish(error) {
   if (done) return; done = true; sim.stop(); clearTimeout(wall);
   fs.writeFileSync(path.join(here, 'build', 'emulator-' + outputName + '.log'), text);

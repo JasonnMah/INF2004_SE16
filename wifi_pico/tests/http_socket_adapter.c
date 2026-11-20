@@ -50,11 +50,12 @@ int ipaddr_aton(const char *s,ip_addr_t *ip) { return inet_pton(AF_INET,s,&ip->u
 static uint32_t clock_ms(void) { struct timespec t;clock_gettime(CLOCK_MONOTONIC,&t);return (uint32_t)((uint64_t)t.tv_sec*1000+t.tv_nsec/1000000); }
 int main(int argc,char **argv) {
  static unsigned char body[65536];
- assert(argc==2||argc==3||argc==4);
+ assert(argc==2||argc==3||argc==4||argc==5);
  if(argc==3) { assert(!strcmp(argv[2],"config"));http_config_start(clock_ms(),"127.0.0.1",(unsigned)atoi(argv[1])); }
- else if(argc==4) {
+ else if(argc>=4) {
   FILE *f=fopen(argv[2],"rb");assert(f);unsigned n=(unsigned)fread(body,1,sizeof(body),f);assert(feof(f));fclose(f);
-  http_post_start_data(clock_ms(),"127.0.0.1",(unsigned)atoi(argv[1]),body,n,argv[3]);
+  if (argc==5) http_post_start_batch(clock_ms(),"127.0.0.1",(unsigned)atoi(argv[1]),body,n,argv[3],(unsigned)strtoul(argv[4],NULL,10));
+  else http_post_start_data(clock_ms(),"127.0.0.1",(unsigned)atoi(argv[1]),body,n,argv[3]);
  } else http_post_start(clock_ms(),"127.0.0.1",(unsigned)atoi(argv[1]));
  uint32_t deadline=clock_ms();
  while(http_post_busy()&&clock_ms()-deadline<60000u) {
