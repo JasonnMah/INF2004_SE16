@@ -70,10 +70,17 @@ int main(void)
     assert(!rt_upload_take(&job)); /* Peeking another kind must preserve it. */
     assert(rt_config_request_take(&token)&&token==7);
     static const unsigned char bytes[]={0,0x7d,0x7e,0xff};
-    const upload_job_t original={bytes,sizeof(bytes),"log-ipc"};
+    const upload_job_t original={.data=bytes,.length=sizeof(bytes),.id="log-ipc"
+#if APP_BATCHED
+        ,.total_length=1048576
+#endif
+    };
     assert(rt_upload_send(&original));
     assert(!rt_config_request_take(&token));
     assert(rt_upload_take(&job)&&job.data==bytes&&job.length==sizeof(bytes)&&!strcmp(job.id,"log-ipc"));
+#if APP_BATCHED
+    assert(job.total_length==1048576);
+#endif
     pc_config_result_t config={.token=7,.result=1,.interval_minutes=4095,.unix_seconds=1793491200u};
     rt_config_result_send(&config);
     config.interval_minutes=2; /* Queue holds a copy, not the stack address. */

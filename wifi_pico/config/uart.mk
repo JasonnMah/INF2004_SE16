@@ -34,7 +34,7 @@ $(error Use build.ps1 to select an isolated object profile)
 endif
 CFLAGS += -DAPP_SENSOR_EMULATOR=$(APP_SENSOR_EMULATOR) -DAPP_VERBOSE_DIAGNOSTICS=$(APP_VERBOSE_DIAGNOSTICS) \
  -DTM_CONSOLE_UART=0 -DUART_FAULT=$(UART_FAULT) -include ../../config/project.h \
- -I../.. -I../../tests/firmware -I../../../shared/uart_protocol/src -I../../../uart_protocol/src
+ -I../.. -I../../tests/firmware -I../../../sensor_pico/lib/uart_protocol/src -I../../tests/fixtures
 OBJS := $(filter-out ./mtkernel_3/app_program/%,$(OBJS))
 C_DEPS := $(filter-out ./mtkernel_3/app_program/%,$(C_DEPS))
 PROJECT_SRCS := tests/firmware/uart_main.c communication.c lab_capture.c uart_io.c rx_ring.c buttons.c ui.c status.c kernel_io.c
@@ -45,15 +45,15 @@ else ifneq ($(UART_FAULT),0)
 PROJECT_SRCS += tests/firmware/fault_injection.c
 endif
 PROJECT_OBJS := $(addprefix ./mtkernel_3/uart/,$(PROJECT_SRCS:.c=.o))
-UART_PROTOCOL_ROOT := ../../../shared/uart_protocol
+UART_PROTOCOL_ROOT := ../../../sensor_pico/lib/uart_protocol
 UART_LIBRARY_DIR := ./mtkernel_3/uart_shared
 UART_ENDPOINTS := gateway
 ifeq ($(APP_SENSOR_EMULATOR),1)
 UART_ENDPOINTS += sensor
-BASELINE_OBJ := ./mtkernel_3/uart_baseline/demo/mock_logger.o
+BASELINE_OBJ := ./mtkernel_3/uart_fixtures/demo/mock_logger.o
 OBJS += $(BASELINE_OBJ)
 C_DEPS += $(BASELINE_OBJ:.o=.d)
-$(BASELINE_OBJ): ../../../uart_protocol/src/demo/mock_logger.c
+$(BASELINE_OBJ): ../../tests/fixtures/demo/mock_logger.c
 	@mkdir -p "$(@D)"
 	$(GCC) $(CFLAGS) -Wall -Wextra -Werror -D$(TARGET) $(INCPATH) -MF"$(@:%.o=%.d)" -MT"$(@)" -c -o "$@" "$<"
 endif

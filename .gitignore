@@ -1,6 +1,7 @@
 **/build/
 **/build-*/
 **/build_make/
+**/build_windows/
 **/node_modules/
 **/.npm-cache/
 **/__pycache__/

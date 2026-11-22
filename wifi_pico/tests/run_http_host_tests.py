@@ -19,13 +19,23 @@ for name in ('cyw43.h','lwip/netif.h','lwip/dhcp.h'):
 (reporting/'http_test_config.h').write_text('#define UTK_WIFI_SSID "host-fixture"\n')
 commands[0:0]=[['gcc','-std=c11','-Wall','-Wextra','-Werror','-g','-fsanitize=address,undefined',
  '-fno-pie','-no-pie','-DAPP_COMBINED=1','-I'+str(reporting),'-I'+str(W),
- '-I'+str(W.parent/'shared/uart_protocol/src'),
+ '-I'+str(W.parent/'sensor_pico/lib/uart_protocol/src'),
  '-I'+str(W/'course/lib/libwifi/sysdepend/pico_rp2040'),
  str(W/'tests/test_wifi_reporting.c'),'-o',str(B/'test_wifi_reporting')],
  [str(B/'test_wifi_reporting')]]
 output=[]
+commands[0:0]=[['gcc','-std=c11','-Wall','-Wextra','-Werror','-g','-fsanitize=address,undefined',
+ '-fno-pie','-no-pie','-I'+str(W),'-I'+str(W.parent/'sensor_pico/lib/uart_protocol/src'),
+ str(W/'buttons.c'),str(W/'tests/test_flash_buttons.c'),'-o',str(B/'test_flash_buttons')],
+ [str(B/'test_flash_buttons')]]
+commands[0:0]=[['gcc','-std=c11','-Wall','-Wextra','-Werror','-g','-fsanitize=address,undefined',
+ '-fno-pie','-no-pie','-I'+str(W),'-I'+str(W.parent/'sensor_pico/lib/uart_protocol/src'),
+ str(W/'batch_store.c'),str(W/'tests/test_batch_store.c'),
+ str(W.parent/'sensor_pico/lib/uart_protocol/src/protocol/frame.c'),
+ str(W.parent/'sensor_pico/lib/uart_protocol/src/protocol/crc16.c'),'-o',str(B/'test_batch_store')],
+ [str(B/'test_batch_store')],[sys.executable,'-B',str(W/'tests/test_batch_receiver.py')]]
 for command in commands:
  p=subprocess.run(command,text=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
  output.append(p.stdout);print(p.stdout,end='')
  if p.returncode:raise SystemExit(p.returncode)
-(W/'tests/evidence/http-host-tests.log').write_text('Host tests only; physical Pico/HTTP: NOT TESTED\n'+''.join(output))
+(B/'http-host-tests.log').write_text('Host tests only; physical Pico/HTTP: NOT TESTED\n'+''.join(output))

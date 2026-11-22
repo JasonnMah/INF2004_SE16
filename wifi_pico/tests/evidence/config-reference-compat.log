@@ -1,2 +1,0 @@
-PASS: unchanged reference Sensor accepts current Wi-Fi CONFIG and ACKs repeated CONFIG
-PASS: current shared Wi-Fi sender accepts actual reference Sensor ACK

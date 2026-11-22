@@ -2,7 +2,7 @@
 """Host-only UART/workflow/client/PC tests. No SMP or physical timing claims."""
 from pathlib import Path
 import hashlib,importlib.util,subprocess,threading,tempfile
-W=Path(__file__).resolve().parents[1];S=W.parent/'shared/uart_protocol/src'
+W=Path(__file__).resolve().parents[1];S=W.parent/'sensor_pico/lib/uart_protocol/src'
 B=W/'course/build_make/combined_host';B.mkdir(parents=True,exist_ok=True)
 out=[]
 def run(args):
@@ -24,7 +24,7 @@ radio=kernel.rsplit('#if APP_COMBINED\n',1)[1].rsplit('#endif',1)[0]
 run(flags+['-DAPP_COMBINED=1','-I'+str(B),'-I'+str(W),'-I'+str(S),
            W/'tests/test_radio_ipc.c',W/'rx_ring.c','-o',B/'test_radio_ipc'])
 run([B/'test_radio_ipc'])
-run(flags+['-I'+str(W),W/'log_id.c',W/'tests/test_log_id.c','-o',B/'test_log_id'])
+run(flags+['-I'+str(W),'-I'+str(S),W/'log_id.c',S/'protocol/log_digest.c',W/'tests/test_log_id.c','-o',B/'test_log_id'])
 ids=run([B/'test_log_id']).splitlines();out.pop()
 for n,line in enumerate(ids):assert line=='log-'+hashlib.sha256(bytes(i%256 for i in range(n))).hexdigest()
 assert len(ids)==1025
@@ -50,5 +50,5 @@ with tempfile.TemporaryDirectory() as directory:
   files=list(Path(directory).glob('*.bin'));assert len(files)==1 and files[0].read_bytes()==snapshot.read_bytes()
   out.append('PASS Sensor host bytes -> UART reassembly -> HTTP client -> PC exact equality; lost receipt retries once, persistent duplicate stored once\n')
  finally:server.shutdown();server.server_close();worker.join()
-(W/'tests/evidence/combined-host-tests.log').write_text('Host tests only; physical combined system PENDING\n'+''.join(out))
+(B/'combined-host-tests.log').write_text('Host tests only; physical combined system PENDING\n'+''.join(out))
 print(''.join(line+'\n' for item in out for line in item.splitlines() if line.startswith(('PASS','HOST HTTP'))))

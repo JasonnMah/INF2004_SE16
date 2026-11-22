@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Static/build checks, not RP2040 runtime or physical UART validation."""
 from pathlib import Path
-import subprocess, hashlib, json, sys, shlex, re, struct
+import subprocess, hashlib, json, sys, shlex, re, struct, os
 W = Path(__file__).resolve().parents[1]
 R = W.parent
-B = W/"course/build_make"
+B = Path(os.environ.get("INF2004_BUILD_DIR",W/"course/build_make")).resolve()
+E = Path(os.environ.get("INF2004_EVIDENCE_DIR",B/"checks"))
+E.mkdir(parents=True,exist_ok=True)
 mode = int(sys.argv[1]) if len(sys.argv)>1 else 0
 emulator = int(sys.argv[2]) if len(sys.argv)>2 else 1
 diagnostics = int(sys.argv[3]) if len(sys.argv)>3 else 0
@@ -33,8 +35,8 @@ origin=json.loads((W/"course/ORIGIN.json").read_text())
 for e in origin["files"]:
     check(source_sha(W/"course"/e.get("stored_path",e["path"]),e["hash_mode"])==e["portable_sha256"],"Course source changed: "+e["path"])
 baseline=json.loads((W/"tests/uart_baseline_sha256.json").read_text())
-for n,h in baseline.items(): check(source_sha(R/n.replace("\\","/"))==h,"UART baseline changed: "+n)
-shared_root=R/"shared/uart_protocol"
+for n,h in baseline.items(): check(source_sha(R/n.replace("\\","/"))==h,"UART fixture changed: "+n)
+shared_root=R/"sensor_pico/lib/uart_protocol"
 shared_origin=json.loads((shared_root/"BASELINE_ORIGIN.json").read_text())
 for name in ("protocol/protocol.h","protocol/crc16.c","protocol/crc16.h","protocol/frame.c","protocol/frame.h","protocol/stream_parser.c","protocol/stream_parser.h"):
     check(source_sha(shared_root/"src"/name)==shared_origin["original_text_lf_sha256"][name],"Wire codec changed: "+name)
@@ -53,12 +55,12 @@ for c in commands:
 check(any("../../tests/firmware/uart_main.c" in c for c in commands),"UART entry missing")
 check(not any("../app_program/app_main.c" in c or "../../tests/firmware/smp_boot_main.c" in c for c in commands),
       "Wrong app compiled")
-sources=[t for c in commands for t in c if t.endswith(".c") and "shared/uart_protocol/src/" in t]
-expected={"protocol/crc16.c","protocol/frame.c","protocol/stream_parser.c","protocol/reliability.c","pico2/pico2_protocol.c"}
+sources=[t for c in commands for t in c if t.endswith(".c") and "sensor_pico/lib/uart_protocol/src/" in t]
+expected={"protocol/log_digest.c","protocol/crc16.c","protocol/frame.c","protocol/stream_parser.c","protocol/reliability.c","pico2/pico2_protocol.c"}
 if emulator: expected.add("pico1/pico1_protocol.c")
-check({s.split("shared/uart_protocol/src/")[1] for s in sources}==expected,"Wrong shared protocol source set")
-legacy=[t for c in commands for t in c if t.endswith(".c") and "../../../uart_protocol/src/" in t]
-check(set(legacy)==({"../../../uart_protocol/src/demo/mock_logger.c"} if emulator else set()),"Unexpected baseline implementation linked")
+check({s.split("sensor_pico/lib/uart_protocol/src/")[1] for s in sources}==expected,"Wrong shared protocol source set")
+fixtures=[t for c in commands for t in c if t.endswith(".c") and "../../tests/fixtures/" in t]
+check(set(fixtures)==({"../../tests/fixtures/demo/mock_logger.c"} if emulator else set()),"Unexpected UART test fixture linked")
 common=["arm-none-eabi-gcc",*flags,"-D_PICO_RP2040_","-I../include","-I../config","-I../kernel/knlinc"]
 macros=dict(re.findall(r"^#define (\w+) (.*)$",run([*common,"-dM","-E","../../tests/firmware/uart_main.c"]),re.M))
 for k,v in {"CNF_SMP":"1","TK_MAX_CORE":"2","TM_CONSOLE_USB_CDC":"1","TM_CONSOLE_UART":"0",
@@ -102,8 +104,8 @@ result={"kind":"build/static checks only","fault":mode,"sensor_emulator":bool(em
             ("CNF_SMP","TK_MAX_CORE","TM_CONSOLE_USB_CDC","TM_CONSOLE_UART","USE_SDEV_DRV","UART_FAULT","APP_SENSOR_EMULATOR","APP_VERBOSE_DIAGNOSTICS")},
         "uf2_bytes":len(data),"uf2_sha256":sha(uf2),"elf_sha256":sha(elf),
         "size":size,"physical_uart_status":"NOT TESTED"}
-out=W/"tests/evidence"/f"uart-build-{label}.json"
+out=E/f"uart-build-{label}.json"
 out.write_text(json.dumps(result,indent=2)+"\n")
-print(f"PASS: UART firmware {label}, SMP=1, USB only, unchanged baseline, ISR/IPC symbol checks")
+print(f"PASS: UART firmware {label}, SMP=1, USB only, unchanged wire codec and fixtures, ISR/IPC symbol checks")
 print(size)
 print("Physical UART/IPC/button/LED test: NOT TESTED; awaiting user capture")

@@ -1,14 +1,14 @@
 /* Startup association retries only; called by the single radio owner.
- * Keep this policy independent of the driver so its bounds/timing are testable.
+ * Keep this policy independent of the driver so its timing is testable.
  */
 #ifndef INF2004_NETWORK_RETRY_H
 #define INF2004_NETWORK_RETRY_H
 #include <stdbool.h>
 #include <stdint.h>
-#define WIFI_JOIN_MAX_ATTEMPTS 3u
+#include <limits.h>
 #define WIFI_JOIN_RETRY_GAP_MS 2000u
 #define WIFI_JOIN_WINDOW_US 30000000ULL
-#define WIFI_JOIN_NONET_RETRY_US 1000000ULL
+#define WIFI_JOIN_NONET_RETRY_US 2000000ULL
 typedef struct {
     unsigned attempts;
     bool waiting;
@@ -20,7 +20,6 @@ typedef struct {
 static inline bool network_retry_due(network_retry_t *retry, bool failed, uint32_t now)
 {
     if (!failed) { retry->waiting = false; return false; }
-    if (retry->attempts >= WIFI_JOIN_MAX_ATTEMPTS) return false;
     if (!retry->waiting) {
         retry->waiting = true;
         retry->failed_at = now;
@@ -29,7 +28,8 @@ static inline bool network_retry_due(network_retry_t *retry, bool failed, uint32
     /* Unsigned subtraction also handles the millisecond counter wrapping. */
     if ((uint32_t)(now - retry->failed_at) < WIFI_JOIN_RETRY_GAP_MS) return false;
     retry->waiting = false;
-    ++retry->attempts;
+    /* Keep retrying indefinitely; the diagnostic counter must not wrap to 0. */
+    if (retry->attempts < UINT_MAX) ++retry->attempts;
     return true;
 }
 /* The stock SDK reconnects on NONET until its deadline. In our radio task,

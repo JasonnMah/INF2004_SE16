@@ -25,7 +25,7 @@ _Static_assert(FLOG_REGION_BYTES < PICO_FLASH_SIZE_BYTES, "region larger than fl
 
 static uint32_t cur_page;
 static bool     full;
-static int32_t  erase_sector;
+static uint32_t erase_sectors_left;
 static bool     erase_active;
 
 static const uint8_t *page_ptr(uint32_t page) {
@@ -62,15 +62,6 @@ bool flog_page_is_empty(uint32_t page) {
     return true;
 }
 
-bool flog_data_view(const uint8_t **data, size_t *length) {
-    if (data == NULL || length == NULL) return false;
-    uint32_t pages = 0;
-    while (pages < FLOG_PAGE_COUNT && !flog_page_is_empty(pages)) ++pages;
-    *data = page_ptr(0);
-    *length = (size_t)pages * FLOG_PAGE_BYTES;
-    return true;
-}
-
 void flog_read_page(uint32_t page, uint8_t out[FLOG_PAGE_BYTES]) {
     memcpy(out, page_ptr(page), FLOG_PAGE_BYTES);
 }
@@ -81,6 +72,7 @@ flog_status_t flog_init(void) {
         image_end - (uintptr_t)XIP_BASE > FLOG_REGION_OFFSET)
         return FLOG_ERR_OVERLAP;
 
+    erase_active = false;
     full = false;
     for (cur_page = 0; cur_page < FLOG_PAGE_COUNT; cur_page++) {
         if (flog_page_is_empty(cur_page)) return FLOG_OK;
@@ -90,9 +82,23 @@ flog_status_t flog_init(void) {
     return FLOG_ERR_FULL;
 }
 
+bool flog_erase_sector(uint32_t sector) {
+    uintptr_t image_end = (uintptr_t)&__flash_binary_end;
+    if (sector >= FLOG_REGION_BYTES / FLASH_SECTOR_SIZE ||
+        (image_end > (uintptr_t)XIP_BASE &&
+         image_end - (uintptr_t)XIP_BASE > FLOG_REGION_OFFSET)) return false;
+    uint32_t off = FLOG_REGION_OFFSET + sector * FLASH_SECTOR_SIZE;
+    if (!run_flash_op(do_erase, &off)) return false;
+    /* Success must mean erased bytes, not only a completed SDK call. */
+    const uint8_t *bytes = (const uint8_t *)(uintptr_t)(XIP_BASE + off);
+    for (uint32_t i = 0; i < FLASH_SECTOR_SIZE; ++i)
+        if (bytes[i] != 0xFF) return false;
+    return true;
+}
+
 bool flog_erase_begin(void) {
     if (erase_active) return false;
-    erase_sector = (int32_t)(FLOG_REGION_BYTES / FLASH_SECTOR_SIZE) - 1;
+    erase_sectors_left = FLOG_REGION_BYTES / FLASH_SECTOR_SIZE;
     erase_active = true;
     return true;
 }
@@ -100,14 +106,14 @@ bool flog_erase_begin(void) {
 bool flog_erase_step(bool *complete) {
     if (complete == NULL || !erase_active) return false;
     *complete = false;
-    uint32_t off = FLOG_REGION_OFFSET + (uint32_t)erase_sector * FLASH_SECTOR_SIZE;
-    if (!run_flash_op(do_erase, &off)) {
-        printf("flash: erase of sector %d failed\n", (int)erase_sector);
+    uint32_t sector = --erase_sectors_left;
+    if (!flog_erase_sector(sector)) {
+        printf("flash: erase/verification of sector %u failed\n", (unsigned)sector);
         erase_active = false;
+        full = true;
         return false;
     }
-
-    if (--erase_sector < 0) {
+    if (erase_sectors_left == 0) {
         cur_page = 0;
         full = false;
         erase_active = false;
@@ -154,3 +160,16 @@ bool flog_advance(void) {
 
 uint32_t flog_current_page(void) { return cur_page; }
 bool     flog_is_full(void)      { return full; }
+
+const uint8_t *flog_data(void) { return page_ptr(0); }
+
+bool flog_data_view(const uint8_t **data, size_t *length) {
+    if (data == NULL || length == NULL || erase_active) return false;
+    // Logging fills pages in order. The current page can already be programmed
+    // by a flush, which keeps the page open for later samples.
+    uint32_t pages = cur_page;
+    if (full || !flog_page_is_empty(cur_page)) ++pages;
+    *data = flog_data();
+    *length = (size_t)pages * FLOG_PAGE_BYTES;
+    return true;
+}

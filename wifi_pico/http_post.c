@@ -19,7 +19,7 @@ static int result, failed;
 static const char *reason = "idle";
 static unsigned char known_body[HTTP_TEST_LENGTH];
 static const unsigned char *body;
-static unsigned body_length;
+static unsigned body_length, batch_request, batch_total;
 static char log_id[81], length_text[11];
 static char header[384], response[1024];
 
@@ -58,6 +58,7 @@ static unsigned build_header(const char *address, unsigned port)
         header_text(":") && header_number(port) &&
         header_text("\r\nContent-Type: application/octet-stream\r\nContent-Length: ") &&
         header_number(body_length) && header_text("\r\nX-Log-ID: ") && header_text(log_id) &&
+        (!batch_request || (header_text("\r\nX-Log-Total: ") && header_number(batch_total))) &&
         header_text("\r\nConnection: close\r\n\r\n");
 }
 
@@ -210,17 +211,19 @@ static void begin_attempt(uint32_t now)
     tcp_err(connection, tcp_error);
     if (tcp_connect(connection, &server, server_port, on_connect) != ERR_OK) fail("TCP connect failed", 1);
 }
-void http_post_start_data(uint32_t now, const char *address, unsigned port,
-                          const unsigned char *data, unsigned length, const char *id)
+static void start_data(uint32_t now, const char *address, unsigned port,
+                        const unsigned char *data, unsigned length, const char *id,
+                        unsigned batched, unsigned total)
 {
     if (http_post_busy()) return;
     result = failed = receipt = attempt = status_code = 0;
-    config_request = 0;
+    config_request = 0; batch_request = batched; batch_total = total;
     reason = "in progress";
     if (!port || port > 65535 || !ipaddr_aton(address, &server)) {
         result = -1; reason = "invalid PC address/port"; return;
     }
-    if ((!data && length) || length > 1024u * 1024u || !id || !*id || strlen(id) >= sizeof(log_id)) {
+    if ((batched && (length > 4096u || total > 1024u * 1024u || length > total)) ||
+        (!data && length) || length > 1024u * 1024u || !id || !*id || strlen(id) >= sizeof(log_id)) {
         result = -1; reason = "invalid body/ID"; return;
     }
     for (const char *p = id; *p; ++p) {
@@ -241,6 +244,13 @@ void http_post_start_data(uint32_t now, const char *address, unsigned port,
     }
     begin_attempt(now);
 }
+void http_post_start_data(uint32_t now, const char *address, unsigned port,
+                          const unsigned char *data, unsigned length, const char *id)
+{ start_data(now, address, port, data, length, id, 0, 0); }
+void http_post_start_batch(uint32_t now, const char *address, unsigned port,
+                           const unsigned char *data, unsigned length, const char *id,
+                           unsigned total)
+{ start_data(now, address, port, data, length, id, 1, total); }
 void http_config_start(uint32_t now, const char *address, unsigned port)
 {
     if (http_post_busy()) return;

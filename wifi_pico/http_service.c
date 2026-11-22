@@ -33,14 +33,117 @@ void cyw43_utk_app_scan(const cyw43_ev_scan_result_t *result)
         target_auth = result->auth_mode;
     }
 }
-static volatile unsigned enabled;
+static volatile unsigned enabled, report_generation;
+/* Main only requests a fresh report. The radio owner still reads the network,
+ * owns all reporting history, and prints the resulting state in its poll. */
+void http_service_report_request(void) { ++report_generation; mp_memory_barrir(); }
+
+enum wifi_stage {
+    WIFI_UNREPORTED, WIFI_STARTING, WIFI_SEARCHING, WIFI_CONNECTING,
+    WIFI_JOIN_FAILED, WIFI_WAIT_IP, WIFI_FINISHING, WIFI_ONLINE,
+    WIFI_LINK_LOST, WIFI_INIT_FAILED
+};
+static struct {
+    enum wifi_stage stage;
+    uint32_t entered_ms, progress_ms, generation;
+    unsigned was_online, ip_delay_reported;
+} connection_report;
+
+static void report_connection(const T_CYW43_UTK_STATUS *network,
+                               struct netif *netif, unsigned ready, unsigned attempt)
+{
+    uint32_t now = (uint32_t)rt_now_ms();
+    unsigned joined = netif_is_link_up(netif);
+    enum wifi_stage stage;
+    if (ready) stage = WIFI_ONLINE;
+    else if (network->init_complete && network->init_result) stage = WIFI_INIT_FAILED;
+    else if (joined) stage = dhcp_supplied_address(netif) ? WIFI_FINISHING : WIFI_WAIT_IP;
+    else if (!network->init_complete) stage = WIFI_STARTING;
+    else if (network->join_complete && network->join_result) stage = WIFI_JOIN_FAILED;
+    else if (network->scan_active || (!network->scan_complete && !network->join_started))
+        stage = WIFI_SEARCHING;
+    else if (connection_report.was_online && network->join_complete) stage = WIFI_LINK_LOST;
+    else stage = WIFI_CONNECTING;
+
+    unsigned changed = stage != connection_report.stage;
+    unsigned refresh = connection_report.generation != report_generation;
+    connection_report.generation = report_generation;
+    if (changed) {
+        connection_report.stage = stage;
+        connection_report.entered_ms = connection_report.progress_ms = now;
+        connection_report.ip_delay_reported = 0;
+    }
+    if (changed || refresh) {
+        switch (stage) {
+        case WIFI_STARTING: rt_log("[WIFI] Starting Wi-Fi radio; uploads paused\n"); break;
+        case WIFI_SEARCHING:
+            rt_numbers("[WIFI] Searching for hotspot (connection attempt %u)\n",attempt,0,0); break;
+        case WIFI_CONNECTING:
+            rt_numbers("[WIFI] Connecting to hotspot (connection attempt %u)\n",attempt,0,0); break;
+        case WIFI_JOIN_FAILED:
+            rt_numbers("[WIFI] Could not join hotspot (code=%d); uploads paused\n",
+                       network->join_result,0,0); break;
+        case WIFI_WAIT_IP:
+            rt_log("[WIFI] Hotspot joined; waiting for an IP address (DHCP). Uploads paused\n");
+            break;
+        case WIFI_FINISHING:
+            rt_log("[WIFI] Hotspot joined; finishing network setup. Uploads paused\n"); break;
+        case WIFI_LINK_LOST:
+            rt_log("[WIFI] Hotspot connection lost; uploads paused while waiting for the link to return\n"); break;
+        case WIFI_INIT_FAILED:
+            rt_numbers("[WIFI] Radio setup failed (code=%d); uploads paused\n",
+                       network->init_result,0,0); break;
+        case WIFI_ONLINE:
+            connection_report.was_online = 1;
+            rt_log("[WIFI] Network ready; Pico IPv4: ");
+            rt_log(ip4addr_ntoa(netif_ip4_addr(netif))); rt_log("\n");
+#if APP_BATCHED
+            rt_log("[WIFI] Uploads enabled; a saved batch resumes automatically\n");
+#elif APP_COMBINED
+            rt_log("[WIFI] Network ready for requests; GP21 retrieves first, next press uploads\n");
+#else
+            rt_log("[READY] Press GP21 to POST 1024 known bytes to the PC\n");
+#endif
+            break;
+        default: break;
+        }
+    }
+    /* A driver's startup DHCP timeout can stay latched after a late lease.
+     * Report a delay once, then use live interface readiness to end the wait. */
+    if (stage == WIFI_WAIT_IP && network->dhcp_complete && network->dhcp_result &&
+        !connection_report.ip_delay_reported) {
+        connection_report.ip_delay_reported = 1;
+        rt_log("[WIFI] IP address assignment is delayed; hotspot is joined and DHCP is still being checked\n");
+    }
+    if ((uint32_t)(now - connection_report.progress_ms) < 10000u && !(refresh && !changed)) return;
+    unsigned seconds = (uint32_t)(now - connection_report.entered_ms) / 1000u;
+    connection_report.progress_ms = now;
+    switch (stage) {
+    case WIFI_WAIT_IP:
+        rt_numbers("[WIFI] Still waiting for IP address: %u seconds; DHCP requests=%u. Hotspot joined; uploads paused\n",
+                   seconds,network->dhcp_tries,0); break;
+    case WIFI_SEARCHING:
+    case WIFI_CONNECTING:
+        rt_numbers("[WIFI] Still trying to connect: %u seconds; connection attempt=%u\n",
+                   seconds,attempt,0); break;
+    case WIFI_LINK_LOST:
+        rt_numbers("[WIFI] Still waiting for hotspot connection: %u seconds; uploads paused\n",seconds,0,0); break;
+    case WIFI_FINISHING:
+        rt_numbers("[WIFI] Still waiting for network setup: %u seconds; uploads paused\n",seconds,0,0); break;
+    default: break;
+    }
+}
+
 void http_service_enable(void) { mp_memory_barrir(); enabled = 1; }
 
 int cyw43_utk_app_poll(struct netif *netif)
 {
     if (!enabled) return 0;
     mp_memory_barrir(); /* IPC objects were fully initialized before publish. */
-    static unsigned announced, last_ready = 2, reported_failures, scan_reported, join_reported, nonet_reported;
+    static unsigned announced;
+#if APP_VERBOSE_DIAGNOSTICS
+    static unsigned scan_reported, join_reported, nonet_reported;
+#endif
 #if !APP_COMBINED
     static unsigned previous_attempt;
 #endif
@@ -50,8 +153,10 @@ int cyw43_utk_app_poll(struct netif *netif)
     unsigned ready = network.ready && netif_is_up(netif) && netif_is_link_up(netif) && dhcp_supplied_address(netif);
     if (!announced) {
         rt_trace("Wi-Fi/HTTP owner", 1, 2);
+        rt_log("[WIFI] Automatic connection retries enabled; retry gap=2000 ms\n");
         announced = 1;
     }
+#if APP_VERBOSE_DIAGNOSTICS
     if (network.scan_complete && !scan_reported) {
         scan_reported = 1;
         rt_numbers("[WIFI DIAG] Scan results=%u target_matches=%u ssid_bytes=%u\n",
@@ -71,34 +176,8 @@ int cyw43_utk_app_poll(struct netif *netif)
         rt_numbers("[WIFI DIAG] Join request=%d link=%d elapsed_ms=%u\n",
                    network.join_request_result, network.link_status, network.join_elapsed_ms);
     }
-    if (ready != last_ready) {
-        last_ready = ready;
-        if (ready) {
-            rt_log("[WIFI] Connected; Pico IPv4: ");
-            rt_log(ip4addr_ntoa(netif_ip4_addr(netif)));
-            rt_log("\n");
-#if APP_COMBINED
-            rt_log("[WIFI] HTTP available; GP21 retrieves first, next press uploads\n");
-#else
-            rt_log("[READY] Press GP21 to POST 1024 known bytes to the PC\n");
 #endif
-        } else rt_log("[WIFI] Not ready; waiting for Wi-Fi and DHCP\n");
-    }
-    if (ready) reported_failures = 0;
-    unsigned failure = network.init_complete && network.init_result ? 1u :
-        network.join_complete && network.join_result ? 2u :
-        network.dhcp_complete && network.dhcp_result ? 4u : 0u;
-    /* Course startup results can retain an earlier DHCP timeout after the
-     * live interface recovers. Do not re-report it on every ready poll. */
-    if (!ready && failure && !(reported_failures & failure)) {
-        reported_failures |= failure;
-        rt_numbers("[WIFI] Setup failed: init=%d join=%d dhcp=%d\n",
-                   network.init_result, network.join_result, network.dhcp_result);
-        if (failure == 2u && retry.attempts < WIFI_JOIN_MAX_ATTEMPTS)
-            rt_log("[WIFI] Retry scheduled in 2000 ms\n");
-        else if (failure == 2u)
-            rt_log("[WIFI] Connection attempts exhausted; check hotspot, then restart Wi-Fi Pico\n");
-    }
+    report_connection(&network, netif, ready, retry.attempts);
 #if APP_COMBINED
     upload_poll(ready);
 #else
@@ -136,12 +215,16 @@ int cyw43_utk_app_poll(struct netif *netif)
     bool join_failed = network.init_result == 0 && network.join_complete &&
                        network.join_result != 0 && !network.netif_link_up &&
                        !http_post_busy();
+    if (join_failed && !retry.waiting)
+        rt_log("[WIFI] Retry scheduled in 2 seconds; a fresh hotspot search will start\n");
     if (network_retry_due(&retry, join_failed, (uint32_t)rt_now_ms())) {
-        rt_numbers("[WIFI] Connection attempt %u/%u: fresh scan and join\n",
-                   retry.attempts, WIFI_JOIN_MAX_ATTEMPTS, 0);
+        rt_numbers("[WIFI] Connection attempt %u: fresh scan and join\n",
+                   retry.attempts, 0, 0);
         scan_results = target_matches = target_channel = target_auth = 0;
         target_rssi = -32768;
-        scan_reported = join_reported = nonet_reported = reported_failures = 0;
+#if APP_VERBOSE_DIAGNOSTICS
+        scan_reported = join_reported = nonet_reported = 0;
+#endif
         return 1;
     }
     return 0;
