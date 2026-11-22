@@ -47,11 +47,11 @@ Power off both boards before connecting the wires.
 
 | Signal | Connection |
 | --- | --- |
-| UART, 115200 8N1 | Wi-Fi GP0 TX â†’ Sensor GP5 RX |
-| UART return | Sensor GP4 TX â†’ Wi-Fi GP1 RX |
-| Ground | Wi-Fi GND â†” Sensor GND |
-| AHT10 data and clock | Sensor GP0 â†’ SDA, Sensor GP1 â†’ SCL |
-| AHT10 power | Sensor 3V3 OUT â†’ VCC, Sensor GND â†’ GND |
+| UART, 115200 8N1 | Wi-Fi GP0 TX, Sensor GP5 RX |
+| UART return | Sensor GP4 TX, Wi-Fi GP1 RX |
+| Ground | Wi-Fi GND, Sensor GND |
+| AHT10 data and clock | Sensor GP0 SDA, Sensor GP1 SCL |
+| AHT10 power | Sensor 3V3 OUT VCC, Sensor GND |
 
 ## Run the logger
 
