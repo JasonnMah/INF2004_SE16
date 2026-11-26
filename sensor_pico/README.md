@@ -37,5 +37,7 @@ The anchor value is `q = round((temperature_C + 40) / 0.25)`, clamped to `0..500
 Configured in minutes, 1 - 4095
 
 ## RAM buffer flush & flash storage
-GP21 flushes buffer
-Hourly auto-flushing during sample wakes.
+- GP21 flushes buffer
+- Buffer auto flushes when full (256 bytes, which is the size of one page)
+- Hourly auto-flushing during sample wakes (configured using AUTO_FLUSH_PERIOD_MS).
+- Flash writing starts on a new page every boot to avoid writing on possible corrupted data 
