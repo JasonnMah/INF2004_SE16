@@ -48,6 +48,11 @@ class Receiver(ThreadingHTTPServer):
             module.jz_decoder()  # Report a missing source dependency at startup.
             self.csv_exporter = module.export_csv
         self.store_lock = threading.Lock()
+        # Load beside this file, also when tests import the receiver by path.
+        batch_spec = importlib.util.spec_from_file_location(
+            'batch_receiver', Path(__file__).with_name('batch_receiver.py'))
+        self.batch_storage = importlib.util.module_from_spec(batch_spec)
+        batch_spec.loader.exec_module(self.batch_storage)
         # Settings persist, but the timestamp is generated on each GP20 fetch.
         self.settings_path = self.directory / 'logger_settings.json'
         self.interval_minutes = None
@@ -237,6 +242,8 @@ class Handler(BaseHTTPRequestHandler):
             self.reply(408); return
         if len(body) != length:
             self.reply(400); return
+        if key.startswith('batch-'):
+            self.receive_batch(key, body); return
         if self.server.expect_known and (key != KNOWN_ID or body != KNOWN_BYTES):
             print('[PC] FAIL: known-byte comparison mismatch', flush=True)
             self.reply(422); return
@@ -289,6 +296,49 @@ class Handler(BaseHTTPRequestHandler):
             self.close_connection = True
             return
         self.reply(code, key, length, result)
+
+    def receive_batch(self, key, body):
+        """Batch receipts confirm fragments; CSV is exported only after assembly."""
+        totals = self.headers.get_all('X-Log-Total', [])
+        if (self.server.expect_known or len(totals) != 1 or
+                not re.fullmatch(r'[0-9]{1,8}', totals[0])):
+            self.reply(400); return
+        try:
+            with self.server.store_lock:
+                result = self.server.batch_storage.store_batch(
+                    self.server.directory, key, int(totals[0]), body)
+                path = result['path']
+                csv_count, csv_error = None, None
+                if path is not None and self.server.csv_exporter:
+                    try:
+                        csv_count = self.server.csv_exporter(
+                            path.read_bytes(), path.with_suffix('.csv'), self.server.timestamp_source,
+                            log_format=self.server.log_format, diagnostic_columns=self.server.diagnostic_columns)
+                        self.server.csv_downloads()
+                    except (ValueError, OSError) as error:
+                        csv_error = str(error)
+                drop = self.server.drop_next_receipt
+                self.server.drop_next_receipt = False
+        except self.server.batch_storage.BatchError as error:
+            print(f'[BATCH] Rejected: {error}', flush=True)
+            self.reply(error.status); return
+        except OSError:
+            self.reply(500); return
+        print(f"[BATCH] {result['result']}: offset={result['offset']} bytes={len(body)} "
+              f"total={result['total']} complete={int(path is not None)}", flush=True)
+        if path is not None:
+            print(f"[PC] Complete log verified: bytes={result['total']} file={path.resolve()}", flush=True)
+        if csv_count is not None:
+            print(f'[CSV] samples={csv_count} file={path.with_suffix(".csv").resolve()}', flush=True)
+            print(f'[CSV] Download: /logs/{path.stem}.csv', flush=True)
+        elif csv_error is not None:
+            print(f'[CSV] Not exported: {csv_error}; binary preserved', flush=True)
+        if drop:
+            print('[PC TEST] Receipt dropped once; stored batch retained', flush=True)
+            self.close_connection = True
+            return
+        self.reply(200 if result['result'] == 'duplicate' else 201,
+                   key, len(body), result['result'])
 
     def do_GET(self):
         if self.path == '/config':

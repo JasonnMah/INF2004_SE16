@@ -11,16 +11,15 @@
  *   UART RX      lp_add_uart_wake(...)     falling edge on the RX pin (the start bit of the first byte)
  *
  * The UART clocks are gated while asleep, so the byte that wakes the chip is lost (or garbled), and the
- * UART may flag a framing error. The sender must therefore start every message with a sacrificial
- * preamble and then pause (see main.c). Bytes sent after the pause are received normally, because all
- * clocks are running again once the chip is awake.
+ * UART may flag a framing error. The Wi-Fi Pico sends 32 bytes of 0x55 immediately before
+ * the frame. The Sensor looks for the remainder of that prefix and the start-of-frame delimiter.
  *
  * Usage
  *   lp_init();                          claim an alarm
  *   lp_add_button(PIN);                 any number of buttons, up to LP_MAX_BUTTONS (pull-up, to GND)
  *   lp_add_uart_wake(uart1, RX_PIN);    after the UART and its pin are set up
  *   lp_arm_timer(when);
- *   lp_sleep_until_event();             may return early on any interrupt: test the events afterwards
+ *   lp_sleep_until_event(work_pending); may return on any interrupt: check the events afterwards
  *   if (lp_take_timer()) ...   if (lp_take_button(PIN)) ...   if (lp_take_uart_wake()) ...
  */
 #ifndef LOW_POWER_H
@@ -45,14 +44,15 @@ void lp_add_uart_wake(uart_inst_t *uart, uint rx_pin);
 /* Schedule the timer event for absolute time `when` (replaces any earlier schedule). If `when` has
  * already passed, the event is raised immediately. */
 void lp_arm_timer(absolute_time_t when);
+void lp_cancel_timer(void);
 
 /* Return true once per event, and clear it. Safe to call from the main loop at any time. */
 bool lp_take_timer(void);
 bool lp_take_button(uint pin);
 bool lp_take_uart_wake(void);
 
-/* Light sleep until an event. Returns at once if one has already happened or the RX line is low.
- * May also return early on other interrupts (e.g. the USB stdio timer). */
-void lp_sleep_until_event(void);
+/* Check work_pending with interrupts masked and UART wake armed, just before
+ * gating clocks. The callback must only inspect state. Return true if WFI ran. */
+bool lp_sleep_until_event(bool (*work_pending)(void));
 
 #endif

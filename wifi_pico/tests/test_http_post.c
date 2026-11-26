@@ -9,7 +9,7 @@ static err_t (*recv_cb)(void *,struct tcp_pcb *,struct pbuf *,err_t);
 static err_t (*connect_cb)(void *,struct tcp_pcb *,err_t);
 static void (*error_cb)(void *,err_t);
 static unsigned live, mem_full, refuse, now, sent_length;
-static char sent[4096];
+static char sent[8192];
 static void check_live(struct tcp_pcb *p) { assert(live && p == &pcb); }
 struct tcp_pcb *tcp_new(void) { assert(!live); live=1; sent_length=0; return &pcb; }
 void tcp_arg(struct tcp_pcb *p,void *arg) { check_live(p); (void)arg; }
@@ -138,5 +138,19 @@ int main(void)
  assert(http_post_result()==1); /* Busy POST cannot replace an in-flight GET. */
  begin();send_request();reply(good);assert(http_post_result()==1); /* GET cannot leak into POST. */
  puts("PASS PC configuration GET: fragmented headers, 1/4095 bounds, timestamp overflow, framing, retries, no defaults and POST isolation");
+ static unsigned char batch[4096];
+ for (unsigned i=0;i<sizeof(batch);++i) batch[i]=(unsigned char)i;
+ const char *batch_id="batch-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef-00000000";
+ for (unsigned n=0;n<=4096;n+=4096) {
+  http_post_start_batch(now,"192.168.1.2",8000,batch,n,batch_id,n?1048576:0);
+  connected();for(unsigned i=0;i<1000;++i)tick(1,1);
+  assert(strstr(sent,n?"X-Log-Total: 1048576\r\n":"X-Log-Total: 0\r\n"));
+  char *body=strstr(sent,"\r\n\r\n")+4;
+  assert(sent_length==(unsigned)(body-sent)+n && !memcmp(body,batch,n));
+  char response[256];snprintf(response,sizeof(response),"HTTP/1.1 201 Created\r\nContent-Length: 0\r\nX-Log-ID: %s\r\nX-Log-Length: %u\r\nX-Log-Result: stored\r\n\r\n",batch_id,n);
+  reply(response);assert(http_post_result()==1);
+ }
+ begin();send_request();assert(!strstr(sent,"X-Log-Total:"));reply(good);assert(http_post_result()==1);
+ puts("PASS batch HTTP: zero/full body, whole-log header, exact binary and legacy request isolation");
  puts("HTTP client host tests PASS (no hardware/network claim)");return 0;
 }

@@ -1,4 +1,0 @@
-[wokwi]
-version = 1
-firmware = "build/uart_protocol.uf2"
-elf = "build/uart_protocol.elf"

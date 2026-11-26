@@ -1,6 +1,6 @@
 #include "low_power.h"
 
-#include <stdio.h>
+/* JZ's RP2040 clock-gated sleep. Application-specific work stays in main.c. */
 
 #include "hardware/clocks.h"
 #include "hardware/gpio.h"
@@ -36,11 +36,6 @@ static void on_alarm(uint id) {
 
 static void on_gpio(uint gpio, uint32_t events) {
     (void)events;
-    if (wake_uart && gpio == wake_pin) {
-        uart_flag = true;
-        gpio_set_irq_enabled(gpio, GPIO_IRQ_EDGE_FALL, false);   /* one edge is enough; every byte has one */
-        return;
-    }
     for (unsigned i = 0; i < n_buttons; i++) {
         if (buttons[i].pin != gpio) continue;
         uint32_t now = time_us_32();
@@ -70,7 +65,7 @@ bool lp_add_button(uint pin) {
     gpio_set_dir(pin, GPIO_IN);
     gpio_pull_up(pin);
     buttons[n_buttons].pin = pin;
-    buttons[n_buttons].last_us = time_us_32();
+    buttons[n_buttons].last_us = time_us_32() - DEBOUNCE_US;
     buttons[n_buttons].flag = false;
     n_buttons++;
     gpio_set_irq_enabled(pin, GPIO_IRQ_EDGE_FALL, true);
@@ -90,6 +85,13 @@ void lp_arm_timer(absolute_time_t when) {
     if (hardware_alarm_set_target((uint)alarm_num, when)) {
         timer_flag = true;             /* target already passed: due now */
     }
+    restore_interrupts(s);
+}
+
+void lp_cancel_timer(void) {
+    uint32_t s = save_and_disable_interrupts();
+    hardware_alarm_cancel((uint)alarm_num);
+    timer_flag = false;
     restore_interrupts(s);
 }
 
@@ -152,13 +154,7 @@ static void gate_clocks_for_sleep(void) {
     clocks_hw->sleep_en1 = en1;
 }
 
-static void restore_clocks_after_sleep(void) {
-    clocks_hw->sleep_en0 = ~0u;        /* leave every clock enabled in sleep, so a later __wfi/__wfe is harmless */
-    clocks_hw->sleep_en1 = ~0u;
-}
-
-void lp_sleep_until_event(void) {
-    stdio_flush();                     /* let pending output drain before clocks are gated */
+bool lp_sleep_until_event(bool (*work_pending)(void)) {
     if (wake_uart) uart_tx_wait_blocking(wake_uart);   /* the last byte must leave the shifter first */
 
     /* Interrupts are masked while we decide to sleep. __wfi() still wakes on a pending interrupt even
@@ -172,17 +168,29 @@ void lp_sleep_until_event(void) {
         if (!gpio_get(wake_pin)) uart_flag = true;                   /* a byte is already arriving: stay awake */
     }
 
-    if (!timer_flag && !any_button_flag() && !uart_flag) {
+    bool slept = !timer_flag && !any_button_flag() && !uart_flag &&
+                 (!work_pending || !work_pending());
+    if (slept) {
+        uint32_t sleep_en0 = clocks_hw->sleep_en0;
+        uint32_t sleep_en1 = clocks_hw->sleep_en1;
+        uint32_t scr = scb_hw->scr;
         gate_clocks_for_sleep();
-        scb_hw->scr |= M0PLUS_SCR_SLEEPDEEP_BITS;
+        scb_hw->scr = scr | M0PLUS_SCR_SLEEPDEEP_BITS;
+        __dsb();
         __wfi();
-        scb_hw->scr &= ~M0PLUS_SCR_SLEEPDEEP_BITS;
-        restore_clocks_after_sleep();
+        scb_hw->scr = scr;
+        clocks_hw->sleep_en0 = sleep_en0;
+        clocks_hw->sleep_en1 = sleep_en1;
     }
-    restore_interrupts(s);             /* pending handlers run here, including the RX-edge one */
 
-    if (wake_uart) {                   /* awake again: the UART's own interrupt takes over */
+    if (wake_uart) {
+        /* Capture the latched edge before disabling it. UART1's IRQ handles
+         * the buffered bytes once interrupts are restored. */
+        if (slept && (gpio_get_irq_event_mask(wake_pin) & GPIO_IRQ_EDGE_FALL))
+            uart_flag = true;
         gpio_set_irq_enabled(wake_pin, GPIO_IRQ_EDGE_FALL, false);
         gpio_acknowledge_irq(wake_pin, GPIO_IRQ_EDGE_FALL);
     }
+    restore_interrupts(s);
+    return slept;
 }

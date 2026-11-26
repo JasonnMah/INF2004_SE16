@@ -11,6 +11,9 @@
  * immutable until the transaction finishes; the client copies the ID. */
 void http_post_start_data(uint32_t now, const char *address, unsigned port,
                           const unsigned char *data, unsigned length, const char *id);
+void http_post_start_batch(uint32_t now, const char *address, unsigned port,
+                           const unsigned char *data, unsigned length, const char *id,
+                           unsigned total_length);
 void http_post_start(uint32_t now, const char *address, unsigned port);
 void http_post_poll(uint32_t now, unsigned network_ready);
 /* Same bounded connection/retry engine, exclusively owned by the radio task.

@@ -1,6 +1,0 @@
-build
-build-*/
-tests/node_modules/
-.npm-cache/
-__pycache__/
-!.vscode/*

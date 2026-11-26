@@ -1,8 +1,3 @@
-/*
- * Course-kernel boundary. Do not include standard size_t/Pico SDK headers here:
- * this port's tk/syslib.h has its own size_t typedef. The protocol is compiled
- * separately with tiny UART/time adapters and its original standard-C headers.
- */
 #include <tk/tkernel.h>
 #include <tm/tmonitor.h>
 #include <sys/sysdef.h>
